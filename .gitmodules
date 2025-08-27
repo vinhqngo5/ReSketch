@@ -1,0 +1,3 @@
+[submodule "src/frequency_summary/geometric_sketch"]
+	path = src/frequency_summary/geometric_sketch
+	url = https://github.com/ThrowAndAway/GS.git

@@ -1,0 +1,79 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "(gdb) Launch",
+			"type": "cppdbg",
+			"request": "launch",
+			// "program": "/Users/vinhq/Library/CloudStorage/OneDrive-Chalmers/Desktop/Q32025/ReSketch/build/bin/debug/sketch_benchmark",
+			"program": "/tmp/sketch_benchmark",
+			"args": [
+				"--app.top_k_eval", "10000000",
+        "--app.stream_size", "100",
+			],
+			"stopAtEntry": false,
+			"cwd": "${workspaceFolder}",
+			"environment": [
+				{
+					"name": "PATH",
+					"value": "${env:PATH}:${command:cmake.launchTargetDirectory}"
+				},
+				{
+					"name": "OTHER_VALUE",
+					"value": "Something something"
+				}
+			],
+			"externalConsole": false,
+			"MIMode": "gdb",
+			"setupCommands": [
+				{
+					"description": "Enable pretty-printing for gdb",
+					"text": "-enable-pretty-printing",
+					"ignoreFailures": true
+				}
+			]
+		},
+		{
+			"name": "(gdb) Launch with args",
+			"type": "cppdbg",
+			"request": "launch",
+			"program": "${command:cmake.launchTargetPath}",
+			"args": ["--a", "${input:a}"],
+			"stopAtEntry": false,
+			"cwd": "${workspaceFolder}",
+			"environment": [
+				{
+					"name": "PATH",
+					"value": "${env:PATH}:${command:cmake.launchTargetDirectory}"
+				},
+				{
+					"name": "OTHER_VALUE",
+					"value": "Something something"
+				}
+			],
+			"externalConsole": false,
+			"MIMode": "gdb",
+			"setupCommands": [
+				{
+					"description": "Enable pretty-printing for gdb",
+					"text": "-enable-pretty-printing",
+					"ignoreFailures": true
+				}
+			],
+			"logging": {
+				"engineLogging": true,
+				"trace": true,
+				"traceResponse": true,
+				"moduleLoad": true,
+			}
+		}
+	],
+	"inputs": [
+		{
+			"id": "a",
+			"type": "promptString",
+			"description": "Enter a value for a",
+			"default": "10"
+		}
+	]
+}

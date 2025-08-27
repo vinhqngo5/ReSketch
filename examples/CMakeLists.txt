@@ -1,0 +1,2 @@
+add_executable(sketch_benchmark main.cpp)
+target_link_libraries(sketch_benchmark PRIVATE frequency_summary_lib)
