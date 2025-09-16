@@ -1,13 +1,14 @@
 #pragma once
 
-#include "frequency_summary/frequency_summary.hpp"
-#include "quantile_summary.hpp"
-#include "quantile_summary_config.hpp"
 #include <algorithm>
 #include <cmath>
 #include <random>
 #include <stdexcept>
 #include <vector>
+
+#include "frequency_summary/frequency_summary.hpp"
+#include "quantile_summary.hpp"
+#include "quantile_summary_config.hpp"
 
 class KLL : public QuantileSummary, public FrequencySummary {
   public:
@@ -190,6 +191,8 @@ class KLL : public QuantileSummary, public FrequencySummary {
         // The level to compress must exist and be full.
         if (level >= m_compactors.size() || m_compactors[level].size() < _get_level_capacity(level)) { return; }
 
+        if (level + 1 >= m_compactors.size()) { m_compactors.emplace_back(); }
+
         std::sort(m_compactors[level].begin(), m_compactors[level].end());
 
         auto &source_compactor = m_compactors[level];
@@ -205,7 +208,6 @@ class KLL : public QuantileSummary, public FrequencySummary {
         }
         source_compactor.resize(keeper_count);
 
-        if (level + 1 >= m_compactors.size()) { m_compactors.emplace_back(); }
         auto &target_compactor = m_compactors[level + 1];
 
         target_compactor.insert(target_compactor.end(), source_compactor.begin(), source_compactor.end());

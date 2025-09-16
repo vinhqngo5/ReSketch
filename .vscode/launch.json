@@ -6,10 +6,10 @@
 			"type": "cppdbg",
 			"request": "launch",
 			// "program": "/Users/vinhq/Library/CloudStorage/OneDrive-Chalmers/Desktop/Q32025/ReSketch/build/bin/debug/sketch_benchmark",
-			"program": "/tmp/sketch_benchmark",
+			"program": "/home/vinh/Q32025/ReSketch/build/debug/bin/debug/sketch_benchmark",
 			"args": [
-				"--app.top_k_eval", "10000000",
-        "--app.stream_size", "100",
+				// "--app.top_k_eval", "10000000",
+        // "--app.stream_size", "100",
 			],
 			"stopAtEntry": false,
 			"cwd": "${workspaceFolder}",
