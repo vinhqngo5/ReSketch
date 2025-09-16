@@ -1,3 +1,6 @@
+#define DOCTEST_CONFIG_IMPLEMENT
+#include "doctest.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -14,6 +17,8 @@
 
 // Sketch Headers (now templated)
 #include "frequency_summary/count_min_sketch.hpp"
+#include "frequency_summary/dynamic_sketch_wrapper.hpp"
+#include "frequency_summary/geometric_sketch_wrapper.hpp"
 #include "frequency_summary/resketch.hpp"
 #include "quantile_summary/kll.hpp"
 
@@ -43,14 +48,14 @@ struct AppConfig {
 
 // Timer class to measure execution time
 class Timer {
-   public:
+  public:
     void start() { m_start = std::chrono::high_resolution_clock::now(); }
     double stop_s() const {
         auto end = std::chrono::high_resolution_clock::now();
         return std::chrono::duration<double>(end - m_start).count();
     }
 
-   private:
+  private:
     std::chrono::time_point<std::chrono::high_resolution_clock> m_start;
 };
 
@@ -89,24 +94,18 @@ vector<uint64_t> generate_zipf_data(uint64_t size, uint64_t diversity, double a)
         pdf[i - 1] = 1.0 / pow(static_cast<double>(i), a);
         sum += pdf[i - 1];
     }
-    for (uint64_t i = 0; i < diversity; ++i) {
-        pdf[i] /= sum;
-    }
+    for (uint64_t i = 0; i < diversity; ++i) { pdf[i] /= sum; }
     std::discrete_distribution<uint64_t> dist(pdf.begin(), pdf.end());
     std::mt19937_64 rng(std::random_device{}());
     vector<uint64_t> data;
     data.reserve(size);
-    for (uint64_t i = 0; i < size; ++i) {
-        data.push_back(dist(rng));
-    }
+    for (uint64_t i = 0; i < size; ++i) { data.push_back(dist(rng)); }
     return data;
 }
 
 map<uint64_t, uint64_t> get_true_freqs(const vector<uint64_t> &data) {
     map<uint64_t, uint64_t> freqs;
-    for (const auto &item : data) {
-        freqs[item]++;
-    }
+    for (const auto &item : data) { freqs[item]++; }
     return freqs;
 }
 
@@ -114,10 +113,8 @@ vector<uint64_t> get_top_k_items(const map<uint64_t, uint64_t> &freqs, int k) {
     vector<pair<uint64_t, uint64_t>> sorted_freqs(freqs.begin(), freqs.end());
     sort(sorted_freqs.begin(), sorted_freqs.end(), [](const auto &a, const auto &b) { return a.second > b.second; });
     vector<uint64_t> top_items;
-    top_items.reserve(min((size_t)k, sorted_freqs.size()));
-    for (int i = 0; i < k && i < sorted_freqs.size(); ++i) {
-        top_items.push_back(sorted_freqs[i].first);
-    }
+    top_items.reserve(min((size_t) k, sorted_freqs.size()));
+    for (int i = 0; i < k && i < sorted_freqs.size(); ++i) { top_items.push_back(sorted_freqs[i].first); }
     return top_items;
 }
 
@@ -127,7 +124,8 @@ void print_results(const string &title, const vector<EvaluationResult> &results)
     cout << "| Sketch Name              | Mem (KB) | Tput(Mops) | AAE Top100 | ARE Top100| AAE Top1K | ARE Top1K |    AAE All |    ARE All |" << endl;
     cout << "+--------------------------+----------+------------+------------+-----------+-----------+-----------+------------+------------+" << endl;
     for (const auto &res : results) {
-        cout << "| " << left << setw(24) << res.name << "| " << right << setw(8) << res.memory_kb << " | " << setw(10) << fixed << setprecision(2) << res.throughput << " | " << setw(10) << fixed << setprecision(2) << res.aae_top100 << " | " << setw(8) << fixed << setprecision(2) << res.are_top100 * 100.0 << "%"
+        cout << "| " << left << setw(24) << res.name << "| " << right << setw(8) << res.memory_kb << " | " << setw(10) << fixed << setprecision(2) << res.throughput << " | "
+             << setw(10) << fixed << setprecision(2) << res.aae_top100 << " | " << setw(8) << fixed << setprecision(2) << res.are_top100 * 100.0 << "%"
              << " | " << setw(9) << fixed << setprecision(2) << res.aae_top1k << " | " << setw(8) << fixed << setprecision(2) << res.are_top1k * 100.0 << "%"
              << " | " << setw(10) << fixed << setprecision(2) << res.aae_all << " | " << setw(9) << fixed << setprecision(2) << res.are_all * 100.0 << "% |" << endl;
     }
@@ -135,7 +133,8 @@ void print_results(const string &title, const vector<EvaluationResult> &results)
 }
 
 template <typename SketchType>
-EvaluationResult evaluate(const string &name, const SketchType &sketch, const map<uint64_t, uint64_t> &true_freqs, const vector<uint64_t> &top100, const vector<uint64_t> &top1k, const vector<uint64_t> &all_unique, double duration_s, size_t stream_size) {
+EvaluationResult evaluate(const string &name, const SketchType &sketch, const map<uint64_t, uint64_t> &true_freqs, const vector<uint64_t> &top100, const vector<uint64_t> &top1k,
+                          const vector<uint64_t> &all_unique, double duration_s, size_t stream_size) {
     EvaluationResult res;
     res.name = name;
     res.memory_kb = sketch.get_max_memory_usage() / 1024;
@@ -147,7 +146,7 @@ EvaluationResult evaluate(const string &name, const SketchType &sketch, const ma
     return res;
 }
 
-void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig kll_conf, ReSketchConfig rs_conf) {
+void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig kll_conf, ReSketchConfig rs_conf, GeometricSketchConfig gs_conf, DynamicSketchConfig ds_conf) {
     vector<EvaluationResult> results;
     Timer timer;
 
@@ -165,6 +164,10 @@ void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig 
     kll_conf_x2.k *= 2;
     ReSketchConfig rs_conf_x2 = rs_conf;
     rs_conf_x2.width *= 2;
+    GeometricSketchConfig gs_conf_x2 = gs_conf;
+    gs_conf_x2.width *= 2;
+    DynamicSketchConfig ds_conf_x2 = ds_conf;
+    ds_conf_x2.width *= 2;
 
     // --- Static Baselines ---
     {
@@ -209,6 +212,34 @@ void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig 
         double duration = timer.stop_s();
         results.push_back(evaluate("ReSketch (2x)", s, true_freqs, top100, top1k, all_unique, duration, data.size()));
     }
+    {
+        GeometricSketchWrapper s(gs_conf);
+        timer.start();
+        for (const auto &i : data) s.update(i);
+        double duration = timer.stop_s();
+        results.push_back(evaluate("GS (1x)", s, true_freqs, top100, top1k, all_unique, duration, data.size()));
+    }
+    {
+        GeometricSketchWrapper s(gs_conf_x2);
+        timer.start();
+        for (const auto &i : data) s.update(i);
+        double duration = timer.stop_s();
+        results.push_back(evaluate("GS (2x)", s, true_freqs, top100, top1k, all_unique, duration, data.size()));
+    }
+    {
+        DynamicSketchWrapper s(ds_conf);
+        timer.start();
+        for (const auto &i : data) s.update(i);
+        double duration = timer.stop_s();
+        results.push_back(evaluate("DS (1x)", s, true_freqs, top100, top1k, all_unique, duration, data.size()));
+    }
+    {
+        DynamicSketchWrapper s(ds_conf_x2);
+        timer.start();
+        for (const auto &i : data) s.update(i);
+        double duration = timer.stop_s();
+        results.push_back(evaluate("DS (2x)", s, true_freqs, top100, top1k, all_unique, duration, data.size()));
+    }
 
     // --- Dynamic ReSketch: Expand mid-stream ---
     {
@@ -247,6 +278,43 @@ void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig 
         results.push_back(evaluate("ReSketch (Shrink)", sketch, true_freqs, top100, top1k, all_unique, total_duration, data.size()));
     }
 
+    // --- Dynamic GeometricSketch: Expand mid-stream ---
+    {
+        GeometricSketchWrapper sketch(gs_conf);
+        double total_duration = 0;
+        size_t halfway = data.size() / 2;
+
+        timer.start();
+        for (size_t i = 0; i < halfway; ++i) sketch.update(data[i]);
+        total_duration += timer.stop_s();
+
+        sketch.expand(gs_conf.width * 2);
+
+        timer.start();
+        for (size_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
+        total_duration += timer.stop_s();
+
+        results.push_back(evaluate("GS (Expand)", sketch, true_freqs, top100, top1k, all_unique, total_duration, data.size()));
+    }
+    // --- Dynamic DynamicSketch: Expand mid-stream ---
+    {
+        DynamicSketchWrapper sketch(ds_conf);
+        double total_duration = 0;
+        size_t halfway = data.size() / 2;
+
+        timer.start();
+        for (size_t i = 0; i < halfway; ++i) sketch.update(data[i]);
+        total_duration += timer.stop_s();
+
+        sketch.expand(ds_conf.width * 2);
+
+        timer.start();
+        for (size_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
+        total_duration += timer.stop_s();
+
+        results.push_back(evaluate("DS (Expand)", sketch, true_freqs, top100, top1k, all_unique, total_duration, data.size()));
+    }
+
     print_results("SCENARIO 2: DYNAMIC RESIZING", results);
 }
 
@@ -256,11 +324,15 @@ int main(int argc, char **argv) {
     CountMinConfig count_min_configs;
     KLLConfig kll_configs;
     ReSketchConfig resketch_configs;
+    GeometricSketchConfig geometric_sketch_configs;
+    DynamicSketchConfig dynamic_sketch_configs;
 
     AppConfig::add_params_to_config_parser(app_configs, parser);
     CountMinConfig::add_params_to_config_parser(count_min_configs, parser);
     KLLConfig::add_params_to_config_parser(kll_configs, parser);
     ReSketchConfig::add_params_to_config_parser(resketch_configs, parser);
+    GeometricSketchConfig::add_params_to_config_parser(geometric_sketch_configs, parser);
+    DynamicSketchConfig::add_params_to_config_parser(dynamic_sketch_configs, parser);
 
     if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h")) {
         parser.PrintUsage();
@@ -281,8 +353,10 @@ int main(int argc, char **argv) {
     cout << count_min_configs;
     cout << kll_configs;
     cout << resketch_configs;
+    cout << geometric_sketch_configs;
+    cout << dynamic_sketch_configs;
 
-    scenario_2_resize(app_configs, count_min_configs, kll_configs, resketch_configs);
+    scenario_2_resize(app_configs, count_min_configs, kll_configs, resketch_configs, geometric_sketch_configs, dynamic_sketch_configs);
 
     return 0;
 }

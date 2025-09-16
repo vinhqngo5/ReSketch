@@ -40,3 +40,35 @@ struct ReSketchConfig {
         return os;
     }
 };
+
+struct GeometricSketchConfig {
+    uint32_t width;
+    uint32_t depth;
+    uint32_t branching_factor;
+    static void add_params_to_config_parser(GeometricSketchConfig &c, ConfigParser &p) {
+        p.AddParameter(new UnsignedInt32Parameter("geometric.width", "1024", &c.width, false, "Width of Geometric Sketch"));
+        p.AddParameter(new UnsignedInt32Parameter("geometric.depth", "8", &c.depth, false, "Depth of Geometric Sketch"));
+        p.AddParameter(new UnsignedInt32Parameter("geometric.branching_factor", "2", &c.branching_factor, false, "Branching factor of Geometric Sketch"));
+    }
+    auto to_tuple() const { return std::make_tuple("width", width, "depth", depth, "branching_factor", branching_factor); }
+    friend std::ostream &operator<<(std::ostream &os, const GeometricSketchConfig &c) {
+        ConfigPrinter<GeometricSketchConfig>::print(os, c);
+        return os;
+    }
+};
+
+struct DynamicSketchConfig {
+    uint32_t width;
+    uint32_t depth;
+    bool is_same_seed;
+    static void add_params_to_config_parser(DynamicSketchConfig &c, ConfigParser &p) {
+        p.AddParameter(new UnsignedInt32Parameter("dynamic.width", "1024", &c.width, false, "Width of Dynamic Sketch"));
+        p.AddParameter(new UnsignedInt32Parameter("dynamic.depth", "8", &c.depth, false, "Depth of Dynamic Sketch"));
+        p.AddParameter(new BooleanParameter("dynamic.is_same_seed", "false", &c.is_same_seed, false, "Use same seed for all layers in Dynamic Sketch"));
+    }
+    auto to_tuple() const { return std::make_tuple("width", width, "depth", depth, "is_same_seed", is_same_seed); }
+    friend std::ostream &operator<<(std::ostream &os, const DynamicSketchConfig &c) {
+        ConfigPrinter<DynamicSketchConfig>::print(os, c);
+        return os;
+    }
+};
