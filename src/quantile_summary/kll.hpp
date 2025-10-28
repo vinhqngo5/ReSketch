@@ -126,7 +126,8 @@ class KLL : public QuantileSummary, public FrequencySummary {
     }
 
     // Update the sketch with a new item and its weight -> Need to double check the correctness later but it should be correct
-    void update(uint64_t item, uint64_t weight) {
+    // compress = False is used in Split() to avoid repeated compressions
+    void update(uint64_t item, uint64_t weight, bool compress = true) {
         if (weight == 0) return;
 
         m_n += weight;
@@ -142,8 +143,10 @@ class KLL : public QuantileSummary, public FrequencySummary {
 
         // After adding, check all levels for potential compressions
         // Need to compress multiple levels since the first level might not be overflowed but higher levels might be
-        for (uint32_t i = 0; i < m_compactors.size(); ++i) {
-            if (m_compactors[i].size() >= _get_level_capacity(i)) { _compress(i); }
+        if (compress) {
+            for (uint32_t i = 0; i < m_compactors.size(); ++i) {
+                if (m_compactors[i].size() >= _get_level_capacity(i)) { _compress(i); }
+            }
         }
     }
 

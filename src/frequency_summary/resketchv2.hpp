@@ -151,11 +151,11 @@ class ReSketchV2 : public FrequencySummary {
                     if (v < split_point) {
                         uint32_t id1 = _find_bucket_id(h, s1.m_rings[i]);
                         s1.m_buckets[i][id1].count += weight;
-                        s1.m_buckets[i][id1].q_sketch.update(h, weight);
+                        s1.m_buckets[i][id1].q_sketch.update(h, weight, false);
                     } else {
                         uint32_t id2 = _find_bucket_id(h, s2.m_rings[i]);
                         s2.m_buckets[i][id2].count += weight;
-                        s2.m_buckets[i][id2].q_sketch.update(h, weight);
+                        s2.m_buckets[i][id2].q_sketch.update(h, weight, false);
                     }
                 });
             }
