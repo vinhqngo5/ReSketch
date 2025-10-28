@@ -103,13 +103,13 @@ class ReSketch : public FrequencySummary {
         m_width = new_width;
     }
 
-    size_t get_max_memory_usage() const {
-        // size_t buckets_grid_memory = m_depth * sizeof(std::vector<Bucket>);
+    uint32_t get_max_memory_usage() const {
+        // uint32_t buckets_grid_memory = m_depth * sizeof(std::vector<Bucket>);
 
-        // size_t rings_memory = m_depth * sizeof(Ring);
+        // uint32_t rings_memory = m_depth * sizeof(Ring);
 
         KLL sample_kll(m_kll_config);
-        size_t single_kll_max_memory = sample_kll.get_max_memory_usage();
+        uint32_t single_kll_max_memory = sample_kll.get_max_memory_usage();
 
         return single_kll_max_memory * m_depth * m_width;
     }

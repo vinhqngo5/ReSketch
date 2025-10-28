@@ -13,7 +13,7 @@
 #define LONG_PRIME 2147483647
 
 class CountMinSketch : public FrequencySummary {
-   public:
+  public:
     explicit CountMinSketch(const CountMinConfig &config) : m_config(config) { _initialize_from_config(); }
 
     void update(uint64_t item) override {
@@ -33,14 +33,10 @@ class CountMinSketch : public FrequencySummary {
     }
 
     void merge(const CountMinSketch &other) {
-        if (m_width != other.m_width || m_depth != other.m_depth) {
-            throw std::invalid_argument("Cannot merge Count-Min sketches with different dimensions.");
-        }
+        if (m_width != other.m_width || m_depth != other.m_depth) { throw std::invalid_argument("Cannot merge Count-Min sketches with different dimensions."); }
 
         for (unsigned int i = 0; i < m_depth; ++i) {
-            for (unsigned int j = 0; j < m_width; ++j) {
-                m_table[i][j] += other.m_table[i][j];
-            }
+            for (unsigned int j = 0; j < m_width; ++j) { m_table[i][j] += other.m_table[i][j]; }
         }
     }
 
@@ -50,7 +46,14 @@ class CountMinSketch : public FrequencySummary {
         return table_memory;
     }
 
-   private:
+    static uint32_t calculate_max_width(uint32_t total_memory_bytes, uint32_t depth) {
+        if (depth == 0) return 0;
+
+        uint32_t max_counters = total_memory_bytes / sizeof(uint32_t);
+        return static_cast<uint32_t>(max_counters / depth);
+    }
+
+  private:
     void _initialize_from_config() {
         if (m_config.calculate_from == "EPSILON_DELTA") {
             m_width = static_cast<uint32_t>(std::ceil(M_E / m_config.epsilon));
@@ -70,7 +73,7 @@ class CountMinSketch : public FrequencySummary {
         m_hash_b.resize(m_depth);
         for (uint32_t i = 0; i < m_depth; ++i) {
             // For a*x + b, 'a' must be non-zero (and ideally odd).
-            m_hash_a[i] = dist(rng) | 1;  // Ensure 'a' is odd and non-zero
+            m_hash_a[i] = dist(rng) | 1;   // Ensure 'a' is odd and non-zero
             m_hash_b[i] = dist(rng);
         }
     }

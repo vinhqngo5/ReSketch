@@ -1,2 +1,5 @@
 add_executable(sketch_benchmark main.cpp)
 target_link_libraries(sketch_benchmark PRIVATE frequency_summary_lib)
+
+add_executable(expansion_experiment main_expansion.cpp)
+target_link_libraries(expansion_experiment PRIVATE frequency_summary_lib)

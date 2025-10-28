@@ -2,10 +2,13 @@
 data/
 
 # python venv folder
-pyvenv
+venv/
 
 # experimental folder
 experiments/
+output/
+output_old/
+
 
 # fonts
 notebooks/fonts

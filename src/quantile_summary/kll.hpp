@@ -160,6 +160,16 @@ class KLL : public QuantileSummary, public FrequencySummary {
         return max_stored_items * sizeof(uint32_t);   // Assuming each item is stored as a 32-bit integer without changing all the types
     }
 
+    static uint32_t calculate_max_k(uint32_t total_memory_bytes, double c = 2.0 / 3.0) {
+        const uint32_t item_size = sizeof(uint64_t);
+        if (total_memory_bytes < item_size || (1.0 - c) <= 0) { return 0; }
+
+        uint32_t max_storable_items = total_memory_bytes / item_size;
+        double k = static_cast<double>(max_storable_items) * (1.0 - c);
+
+        return static_cast<uint32_t>(std::floor(k));
+    }
+
     friend std::ostream &operator<<(std::ostream &os, const KLL &kll) {
         os << "KLL Sketch:" << std::endl;
         os << "  k: " << kll.m_config.k << std::endl;

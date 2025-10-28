@@ -104,15 +104,25 @@ class ReSketchV2 : public FrequencySummary {
         m_width = new_width;
     }
 
-    size_t get_max_memory_usage() const {
-        // size_t buckets_grid_memory = m_depth * sizeof(std::vector<Bucket>);
+    uint32_t get_max_memory_usage() const {
+        // uint32_t buckets_grid_memory = m_depth * sizeof(std::vector<Bucket>);
 
-        // size_t rings_memory = m_depth * sizeof(Ring);
+        // uint32_t rings_memory = m_depth * sizeof(Ring);
 
         KLL sample_kll(m_kll_config);
-        size_t single_kll_max_memory = sample_kll.get_max_memory_usage();
+        uint32_t single_kll_max_memory = sample_kll.get_max_memory_usage();
 
         return single_kll_max_memory * m_depth * m_width;
+    }
+
+    static uint32_t calculate_max_width(uint32_t total_memory_bytes, uint32_t depth, uint32_t kll_k) {
+        if (depth == 0) return 0;
+
+        KLL sample_kll({kll_k});
+        uint32_t single_kll_max_memory = sample_kll.get_max_memory_usage();
+
+        uint32_t max_buckets = total_memory_bytes / single_kll_max_memory;
+        return static_cast<uint32_t>(max_buckets / depth);
     }
 
     static ReSketchV2 merge(const ReSketchV2 &s1, const ReSketchV2 &s2) {

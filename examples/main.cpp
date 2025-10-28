@@ -15,7 +15,7 @@
 // Utils
 #include "utils/ConfigParser.hpp"
 
-// Sketch Headers (now templated)
+// Sketch Headers
 #include "frequency_summary/count_min_sketch.hpp"
 #include "frequency_summary/dynamic_sketch_wrapper.hpp"
 #include "frequency_summary/geometric_sketch_wrapper.hpp"
@@ -67,7 +67,7 @@ struct EvaluationResult {
     double aae_top1k = 0.0, are_top1k = 0.0;
     double aae_all = 0.0, are_all = 0.0;
     double throughput = 0.0;
-    size_t memory_kb = 0;
+    uint32_t memory_kb = 0;
 
     template <typename SketchType>
     void calculate_error_for(const SketchType &sketch, const map<uint64_t, uint64_t> &true_freqs, const vector<uint64_t> &items, double &out_aae, double &out_are) {
@@ -114,7 +114,7 @@ vector<uint64_t> get_top_k_items(const map<uint64_t, uint64_t> &freqs, int k) {
     vector<pair<uint64_t, uint64_t>> sorted_freqs(freqs.begin(), freqs.end());
     sort(sorted_freqs.begin(), sorted_freqs.end(), [](const auto &a, const auto &b) { return a.second > b.second; });
     vector<uint64_t> top_items;
-    top_items.reserve(min((size_t) k, sorted_freqs.size()));
+    top_items.reserve(min((uint32_t) k, sorted_freqs.size()));
     for (int i = 0; i < k && i < sorted_freqs.size(); ++i) { top_items.push_back(sorted_freqs[i].first); }
     return top_items;
 }
@@ -135,7 +135,7 @@ void print_results(const string &title, const vector<EvaluationResult> &results)
 
 template <typename SketchType>
 EvaluationResult evaluate(const string &name, const SketchType &sketch, const map<uint64_t, uint64_t> &true_freqs, const vector<uint64_t> &top100, const vector<uint64_t> &top1k,
-                          const vector<uint64_t> &all_unique, double duration_s, size_t stream_size) {
+                          const vector<uint64_t> &all_unique, double duration_s, uint32_t stream_size) {
     EvaluationResult res;
     res.name = name;
     res.memory_kb = sketch.get_max_memory_usage() / 1024;
@@ -261,16 +261,16 @@ void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig 
     {
         ReSketch sketch(rs_conf);
         double total_duration = 0;
-        size_t halfway = data.size() / 2;
+        uint32_t halfway = data.size() / 2;
 
         timer.start();
-        for (size_t i = 0; i < halfway; ++i) sketch.update(data[i]);
+        for (uint32_t i = 0; i < halfway; ++i) sketch.update(data[i]);
         total_duration += timer.stop_s();
 
         sketch.expand(rs_conf.width * 2);
 
         timer.start();
-        for (size_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
+        for (uint32_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
         total_duration += timer.stop_s();
 
         results.push_back(evaluate("ReSketch (Expand)", sketch, true_freqs, top100, top1k, all_unique, total_duration, data.size()));
@@ -279,16 +279,16 @@ void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig 
     {
         ReSketch sketch(rs_conf_x2);
         double total_duration = 0;
-        size_t halfway = data.size() / 2;
+        uint32_t halfway = data.size() / 2;
 
         timer.start();
-        for (size_t i = 0; i < halfway; ++i) sketch.update(data[i]);
+        for (uint32_t i = 0; i < halfway; ++i) sketch.update(data[i]);
         total_duration += timer.stop_s();
 
         sketch.shrink(rs_conf.width);
 
         timer.start();
-        for (size_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
+        for (uint32_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
         total_duration += timer.stop_s();
 
         results.push_back(evaluate("ReSketch (Shrink)", sketch, true_freqs, top100, top1k, all_unique, total_duration, data.size()));
@@ -297,16 +297,16 @@ void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig 
     {
         ReSketchV2 sketch(rs_conf);
         double total_duration = 0;
-        size_t halfway = data.size() / 2;
+        uint32_t halfway = data.size() / 2;
 
         timer.start();
-        for (size_t i = 0; i < halfway; ++i) sketch.update(data[i]);
+        for (uint32_t i = 0; i < halfway; ++i) sketch.update(data[i]);
         total_duration += timer.stop_s();
 
         sketch.expand(rs_conf.width * 2);
 
         timer.start();
-        for (size_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
+        for (uint32_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
         total_duration += timer.stop_s();
 
         results.push_back(evaluate("ReSketchV2 (Expand)", sketch, true_freqs, top100, top1k, all_unique, total_duration, data.size()));
@@ -315,16 +315,16 @@ void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig 
     {
         ReSketchV2 sketch(rs_conf_x2);
         double total_duration = 0;
-        size_t halfway = data.size() / 2;
+        uint32_t halfway = data.size() / 2;
 
         timer.start();
-        for (size_t i = 0; i < halfway; ++i) sketch.update(data[i]);
+        for (uint32_t i = 0; i < halfway; ++i) sketch.update(data[i]);
         total_duration += timer.stop_s();
 
         sketch.shrink(rs_conf.width);
 
         timer.start();
-        for (size_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
+        for (uint32_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
         total_duration += timer.stop_s();
 
         results.push_back(evaluate("ReSketchV2 (Shrink)", sketch, true_freqs, top100, top1k, all_unique, total_duration, data.size()));
@@ -334,16 +334,16 @@ void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig 
     {
         GeometricSketchWrapper sketch(gs_conf);
         double total_duration = 0;
-        size_t halfway = data.size() / 2;
+        uint32_t halfway = data.size() / 2;
 
         timer.start();
-        for (size_t i = 0; i < halfway; ++i) sketch.update(data[i]);
+        for (uint32_t i = 0; i < halfway; ++i) sketch.update(data[i]);
         total_duration += timer.stop_s();
 
         sketch.expand(gs_conf.width * 2);
 
         timer.start();
-        for (size_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
+        for (uint32_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
         total_duration += timer.stop_s();
 
         results.push_back(evaluate("GS (Expand)", sketch, true_freqs, top100, top1k, all_unique, total_duration, data.size()));
@@ -352,16 +352,16 @@ void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig 
     {
         DynamicSketchWrapper sketch(ds_conf);
         double total_duration = 0;
-        size_t halfway = data.size() / 2;
+        uint32_t halfway = data.size() / 2;
 
         timer.start();
-        for (size_t i = 0; i < halfway; ++i) sketch.update(data[i]);
+        for (uint32_t i = 0; i < halfway; ++i) sketch.update(data[i]);
         total_duration += timer.stop_s();
 
         sketch.expand(ds_conf.width * 2);
 
         timer.start();
-        for (size_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
+        for (uint32_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
         total_duration += timer.stop_s();
 
         results.push_back(evaluate("DS (Expand)", sketch, true_freqs, top100, top1k, all_unique, total_duration, data.size()));
