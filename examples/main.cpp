@@ -20,6 +20,7 @@
 #include "frequency_summary/dynamic_sketch_wrapper.hpp"
 #include "frequency_summary/geometric_sketch_wrapper.hpp"
 #include "frequency_summary/resketch.hpp"
+#include "frequency_summary/resketchv2.hpp"
 #include "quantile_summary/kll.hpp"
 
 // Config Headers
@@ -212,6 +213,21 @@ void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig 
         double duration = timer.stop_s();
         results.push_back(evaluate("ReSketch (2x)", s, true_freqs, top100, top1k, all_unique, duration, data.size()));
     }
+    // --- ReSketchV2 static baselines ---
+    {
+        ReSketchV2 s(rs_conf);
+        timer.start();
+        for (const auto &i : data) s.update(i);
+        double duration = timer.stop_s();
+        results.push_back(evaluate("ReSketchV2 (1x)", s, true_freqs, top100, top1k, all_unique, duration, data.size()));
+    }
+    {
+        ReSketchV2 s(rs_conf_x2);
+        timer.start();
+        for (const auto &i : data) s.update(i);
+        double duration = timer.stop_s();
+        results.push_back(evaluate("ReSketchV2 (2x)", s, true_freqs, top100, top1k, all_unique, duration, data.size()));
+    }
     {
         GeometricSketchWrapper s(gs_conf);
         timer.start();
@@ -276,6 +292,42 @@ void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig 
         total_duration += timer.stop_s();
 
         results.push_back(evaluate("ReSketch (Shrink)", sketch, true_freqs, top100, top1k, all_unique, total_duration, data.size()));
+    }
+    // --- Dynamic ReSketchV2: Expand mid-stream ---
+    {
+        ReSketchV2 sketch(rs_conf);
+        double total_duration = 0;
+        size_t halfway = data.size() / 2;
+
+        timer.start();
+        for (size_t i = 0; i < halfway; ++i) sketch.update(data[i]);
+        total_duration += timer.stop_s();
+
+        sketch.expand(rs_conf.width * 2);
+
+        timer.start();
+        for (size_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
+        total_duration += timer.stop_s();
+
+        results.push_back(evaluate("ReSketchV2 (Expand)", sketch, true_freqs, top100, top1k, all_unique, total_duration, data.size()));
+    }
+    // --- Dynamic ReSketchV2: Shrink mid-stream ---
+    {
+        ReSketchV2 sketch(rs_conf_x2);
+        double total_duration = 0;
+        size_t halfway = data.size() / 2;
+
+        timer.start();
+        for (size_t i = 0; i < halfway; ++i) sketch.update(data[i]);
+        total_duration += timer.stop_s();
+
+        sketch.shrink(rs_conf.width);
+
+        timer.start();
+        for (size_t i = halfway; i < data.size(); ++i) sketch.update(data[i]);
+        total_duration += timer.stop_s();
+
+        results.push_back(evaluate("ReSketchV2 (Shrink)", sketch, true_freqs, top100, top1k, all_unique, total_duration, data.size()));
     }
 
     // --- Dynamic GeometricSketch: Expand mid-stream ---

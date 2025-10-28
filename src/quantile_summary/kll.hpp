@@ -115,6 +115,38 @@ class KLL : public QuantileSummary, public FrequencySummary {
         return new_sketch;
     }
 
+    // Iterate over all summarized items (used for Split())
+    void for_each_summarized_item(const std::function<void(uint64_t item, uint64_t weight)> &func) const {
+        for (uint32_t i = 0; i < m_compactors.size(); ++i) {
+            if (m_compactors[i].empty()) continue;
+
+            uint64_t weight = 1ULL << i;
+            for (const auto &item_value : m_compactors[i]) { func(item_value, weight); }
+        }
+    }
+
+    // Update the sketch with a new item and its weight -> Need to double check the correctness later but it should be correct
+    void update(uint64_t item, uint64_t weight) {
+        if (weight == 0) return;
+
+        m_n += weight;
+        uint32_t level = 0;
+        while (weight > 0) {
+            if (weight & 1) {
+                if (level >= m_compactors.size()) { m_compactors.resize(level + 1); }
+                m_compactors[level].push_back(item);
+            }
+            weight >>= 1;
+            level++;
+        }
+
+        // After adding, check all levels for potential compressions
+        // Need to compress multiple levels since the first level might not be overflowed but higher levels might be
+        for (uint32_t i = 0; i < m_compactors.size(); ++i) {
+            if (m_compactors[i].size() >= _get_level_capacity(i)) { _compress(i); }
+        }
+    }
+
     uint32_t get_max_memory_usage() const {
         // The total number of items stored across all compactors is bounded by ~3*k.
         // This comes from the sum of the geometric series of capacities: k / (1 - c).
