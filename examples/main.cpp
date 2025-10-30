@@ -12,6 +12,9 @@
 #include <string>
 #include <vector>
 
+// Common utilities
+#include "common.hpp"
+
 // Utils
 #include "utils/ConfigParser.hpp"
 
@@ -47,19 +50,6 @@ struct AppConfig {
     auto to_tuple() const { return std::make_tuple("stream_size", stream_size, "stream_diversity", stream_diversity, "zipf_param", zipf_param); }
 };
 
-// Timer class to measure execution time
-class Timer {
-  public:
-    void start() { m_start = std::chrono::high_resolution_clock::now(); }
-    double stop_s() const {
-        auto end = std::chrono::high_resolution_clock::now();
-        return std::chrono::duration<double>(end - m_start).count();
-    }
-
-  private:
-    std::chrono::time_point<std::chrono::high_resolution_clock> m_start;
-};
-
 // Evaluation result structure
 struct EvaluationResult {
     string name;
@@ -85,39 +75,6 @@ struct EvaluationResult {
         out_are = total_rel_error / items.size();
     }
 };
-
-// --- Core Helper Functions ---
-
-vector<uint64_t> generate_zipf_data(uint64_t size, uint64_t diversity, double a) {
-    vector<double> pdf(diversity);
-    double sum = 0.0;
-    for (uint64_t i = 1; i <= diversity; ++i) {
-        pdf[i - 1] = 1.0 / pow(static_cast<double>(i), a);
-        sum += pdf[i - 1];
-    }
-    for (uint64_t i = 0; i < diversity; ++i) { pdf[i] /= sum; }
-    std::discrete_distribution<uint64_t> dist(pdf.begin(), pdf.end());
-    std::mt19937_64 rng(std::random_device{}());
-    vector<uint64_t> data;
-    data.reserve(size);
-    for (uint64_t i = 0; i < size; ++i) { data.push_back(dist(rng)); }
-    return data;
-}
-
-map<uint64_t, uint64_t> get_true_freqs(const vector<uint64_t> &data) {
-    map<uint64_t, uint64_t> freqs;
-    for (const auto &item : data) { freqs[item]++; }
-    return freqs;
-}
-
-vector<uint64_t> get_top_k_items(const map<uint64_t, uint64_t> &freqs, int k) {
-    vector<pair<uint64_t, uint64_t>> sorted_freqs(freqs.begin(), freqs.end());
-    sort(sorted_freqs.begin(), sorted_freqs.end(), [](const auto &a, const auto &b) { return a.second > b.second; });
-    vector<uint64_t> top_items;
-    top_items.reserve(std::min(static_cast<size_t>(k), sorted_freqs.size()));
-    for (int i = 0; i < k && i < sorted_freqs.size(); ++i) { top_items.push_back(sorted_freqs[i].first); }
-    return top_items;
-}
 
 void print_results(const string &title, const vector<EvaluationResult> &results) {
     cout << "\n--- " << title << " ---\n\n";
@@ -370,6 +327,43 @@ void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig 
     print_results("SCENARIO 2: DYNAMIC RESIZING", results);
 }
 
+void scenario_frequency_comparison(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig kll_conf, ReSketchConfig rs_conf, GeometricSketchConfig gs_conf,
+                                   DynamicSketchConfig ds_conf) {
+    Timer timer;
+
+    cout << "\nGenerating data for frequency comparison..." << endl;
+    auto data = generate_zipf_data(conf.stream_size, conf.stream_diversity, conf.zipf_param);
+    auto true_freqs = get_true_freqs(data);
+    auto top50 = get_top_k_items(true_freqs, 50);
+    auto random100 = get_random_items(true_freqs, 100);
+
+    // Create sketches with the same configuration
+    CountMinSketch cm(cm_conf);
+    KLL kll(kll_conf);
+    ReSketch rs(rs_conf);
+    ReSketchV2 rs_v2(rs_conf);
+    GeometricSketchWrapper gs(gs_conf);
+    DynamicSketchWrapper ds(ds_conf);
+
+    // Update all sketches with the data
+    cout << "Updating sketches..." << endl;
+    for (const auto &item : data) {
+        cm.update(item);
+        kll.update(item);
+        rs.update(item);
+        rs_v2.update(item);
+        gs.update(item);
+        ds.update(item);
+    }
+
+    // Print frequency comparisons
+    vector<string> sketch_names = {"CM", "KLL", "RS", "RSv2", "GS", "DS"};
+
+    cout << "\n=== FREQUENCY COMPARISON ===" << endl;
+    print_frequency_comparison("Top-50 Items", top50, true_freqs, sketch_names, cm, kll, rs, rs_v2, gs, ds);
+    print_frequency_comparison("Random 100 Items", random100, true_freqs, sketch_names, cm, kll, rs, rs_v2, gs, ds);
+}
+
 int main(int argc, char **argv) {
     ConfigParser parser;
     AppConfig app_configs;
@@ -409,6 +403,8 @@ int main(int argc, char **argv) {
     cout << dynamic_sketch_configs;
 
     scenario_2_resize(app_configs, count_min_configs, kll_configs, resketch_configs, geometric_sketch_configs, dynamic_sketch_configs);
+
+    scenario_frequency_comparison(app_configs, count_min_configs, kll_configs, resketch_configs, geometric_sketch_configs, dynamic_sketch_configs);
 
     return 0;
 }
