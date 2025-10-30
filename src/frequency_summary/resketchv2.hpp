@@ -30,6 +30,7 @@ class ReSketchV2 : public FrequencySummary {
         _initialize_seeds();
         _initialize_buckets();
         _initialize_rings();
+        m_partition_ranges = {{0, std::numeric_limits<uint64_t>::max()}};
     }
 
     ReSketchV2(uint32_t depth, uint32_t width, const std::vector<uint32_t> &seeds, uint32_t kll_k, uint32_t partition_seed)
@@ -37,6 +38,7 @@ class ReSketchV2 : public FrequencySummary {
         m_config = {m_width, m_depth, kll_k};
         _initialize_buckets();
         _initialize_rings();
+        m_partition_ranges = {{0, std::numeric_limits<uint64_t>::max()}};
     }
 
     void update(uint64_t item) override {
@@ -141,6 +143,12 @@ class ReSketchV2 : public FrequencySummary {
                 merged_sketch.m_buckets[i][j].q_sketch.merge(temp_buckets_2[j].q_sketch);
             }
         }
+
+        // Merge partition ranges
+        merged_sketch.m_partition_ranges = s1.m_partition_ranges;
+        merged_sketch.m_partition_ranges.insert(merged_sketch.m_partition_ranges.end(), s2.m_partition_ranges.begin(), s2.m_partition_ranges.end());
+        _merge_and_sort_ranges(merged_sketch.m_partition_ranges);
+
         return merged_sketch;
     }
 
@@ -170,8 +178,36 @@ class ReSketchV2 : public FrequencySummary {
                 });
             }
         }
+
+        // Split partition ranges: intersect each range with the split point
+        s1.m_partition_ranges.clear();
+        s2.m_partition_ranges.clear();
+
+        for (const auto &[start, end] : sketch.m_partition_ranges) {
+            if (start < split_point) { s1.m_partition_ranges.push_back({start, std::min(end, split_point)}); }
+            if (end > split_point) { s2.m_partition_ranges.push_back({std::max(start, split_point), end}); }
+        }
+
         return {std::move(s1), std::move(s2)};
     }
+
+    // Static method to compute partition hash without needing a sketch instance
+    static uint64_t compute_partition_hash(uint64_t item, uint32_t partition_seed) { return XXHash64::hash(&item, sizeof(uint64_t), partition_seed); }
+
+    // Check if this sketch is responsible for a given item based on partition ranges
+    bool is_responsible_for(uint64_t item) const {
+        uint64_t h = _partition_hash(item);
+        for (const auto &[start, end] : m_partition_ranges) {
+            if (h >= start && h < end) return true;
+        }
+        return false;
+    }
+
+    // Get the partition seed (needed for distributed systems to compute partition hash)
+    uint32_t get_partition_seed() const { return m_partition_seed; }
+
+    // Get the partition ranges this sketch is responsible for
+    const std::vector<std::pair<uint64_t, uint64_t>> &get_partition_ranges() const { return m_partition_ranges; }
 
   private:
     void _initialize_seeds() {
@@ -267,12 +303,39 @@ class ReSketchV2 : public FrequencySummary {
         return out_buckets;
     }
 
+    // Helper to merge and sort partition ranges, combining overlapping/adjacent ranges
+    static void _merge_and_sort_ranges(std::vector<std::pair<uint64_t, uint64_t>> &ranges) {
+        if (ranges.empty()) return;
+
+        // Sort by start position
+        std::sort(ranges.begin(), ranges.end());
+
+        // Merge overlapping or adjacent ranges
+        std::vector<std::pair<uint64_t, uint64_t>> merged;
+        merged.push_back(ranges[0]);
+
+        for (size_t i = 1; i < ranges.size(); ++i) {
+            auto &last = merged.back();
+            const auto &current = ranges[i];
+
+            // If overlapping or adjacent, merge them
+            if (current.first <= last.second) {
+                last.second = std::max(last.second, current.second);
+            } else {
+                merged.push_back(current);
+            }
+        }
+
+        ranges = std::move(merged);
+    }
+
     ReSketchConfig m_config;
     uint32_t m_width;
     uint32_t m_depth;
     std::vector<uint32_t> m_seeds;
     uint32_t m_partition_seed;   // Seed for the first hashing step (partition hash)
     KLLConfig m_kll_config;
+    std::vector<std::pair<uint64_t, uint64_t>> m_partition_ranges;   // Ranges this sketch is responsible for [(start, end), ...]
 
     std::vector<Ring> m_rings;
     std::vector<std::vector<Bucket>> m_buckets;
