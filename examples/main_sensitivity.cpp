@@ -77,13 +77,13 @@ struct SensitivityConfig {
             os << "Zipf Parameter: " << config.zipf_param << "\n";
         }
         os << "ReSketch K values: ";
-        for (size_t i = 0; i < config.k_values.size(); ++i) {
+        for (uint32_t i = 0; i < config.k_values.size(); ++i) {
             os << config.k_values[i];
             if (i < config.k_values.size() - 1) os << ", ";
         }
         os << "\n";
         os << "ReSketch Depth values: ";
-        for (size_t i = 0; i < config.depth_values.size(); ++i) {
+        for (uint32_t i = 0; i < config.depth_values.size(); ++i) {
             os << config.depth_values[i];
             if (i < config.depth_values.size() - 1) os << ", ";
         }
@@ -350,7 +350,7 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
 
     // Insert timestamp before file extension
     string output_file = config.output_file;
-    size_t ext_pos = output_file.find_last_of('.');
+    uint32_t ext_pos = output_file.find_last_of('.');
     if (ext_pos != string::npos) {
         output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos);
     } else {

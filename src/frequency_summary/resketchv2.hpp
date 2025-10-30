@@ -130,6 +130,8 @@ class ReSketchV2 : public FrequencySummary {
     static ReSketchV2 merge(const ReSketchV2 &s1, const ReSketchV2 &s2) {
         if (s1.m_depth != s2.m_depth || s1.m_kll_config.k != s2.m_kll_config.k) { throw std::invalid_argument("Sketches must have same depth and kll_k to merge."); }
 
+        if (s1.m_seeds != s2.m_seeds) { throw std::invalid_argument("Sketches must have the same seeds to merge."); }
+
         uint32_t new_width = s1.m_width + s2.m_width;
         ReSketchV2 merged_sketch(s1.m_depth, new_width, s1.m_seeds, s1.m_kll_config.k, s1.m_partition_seed);
 
@@ -314,7 +316,7 @@ class ReSketchV2 : public FrequencySummary {
         std::vector<std::pair<uint64_t, uint64_t>> merged;
         merged.push_back(ranges[0]);
 
-        for (size_t i = 1; i < ranges.size(); ++i) {
+        for (uint32_t i = 1; i < ranges.size(); ++i) {
             auto &last = merged.back();
             const auto &current = ranges[i];
 

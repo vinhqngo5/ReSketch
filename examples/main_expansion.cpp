@@ -400,7 +400,7 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
 
     // Insert timestamp before file extension
     string output_file = config.output_file;
-    size_t ext_pos = output_file.find_last_of('.');
+    uint32_t ext_pos = output_file.find_last_of('.');
     if (ext_pos != string::npos) {
         output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos);
     } else {

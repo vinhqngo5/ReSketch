@@ -121,7 +121,7 @@ void export_to_json(const string &filename, const SplitConfig &app_config, const
 
     // Results section
     j["results"] = json::array();
-    for (size_t rep = 0; rep < results.size(); ++rep) {
+    for (uint32_t rep = 0; rep < results.size(); ++rep) {
         const auto &result = results[rep];
         json rep_json = {{"repetition_id", rep},
                          {"sketch_c_full", {{"memory_bytes", result.sketch_c_full.memory_bytes}, {"process_time_s", result.sketch_c_full.process_time_s}}},
@@ -228,19 +228,18 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
 
         cout << "  Unique items: " << true_freqs_A.size() << " (A), " << true_freqs_B.size() << " (B), " << true_freqs_all.size() << " (All)" << endl;
 
-        // Create sketch configurations
-        ReSketchConfig config_C = rs_config;
-        config_C.width = width;
+        // Generate shared seeds for all sketches to ensure consistent hashing
+        std::mt19937_64 rng(std::random_device{}());
+        std::uniform_int_distribution<uint32_t> dist;
 
-        ReSketchConfig config_A = rs_config;
-        config_A.width = width / 2;
-
-        ReSketchConfig config_B = rs_config;
-        config_B.width = width / 2;
+        uint32_t shared_partition_seed = dist(rng);
+        std::vector<uint32_t> shared_seeds;
+        shared_seeds.reserve(rs_config.depth);
+        for (uint32_t i = 0; i < rs_config.depth; ++i) { shared_seeds.push_back(dist(rng)); }
 
         // Process Sketch C (full width, processes both A and B)
         cout << "\nProcessing Sketch C (full, A+B)..." << endl;
-        ReSketchV2 sketch_C(config_C);
+        ReSketchV2 sketch_C(rs_config.depth, width, shared_seeds, rs_config.kll_k, shared_partition_seed);
         Timer timer;
         timer.start();
         for (const auto &item : data_A) { sketch_C.update(item); }
@@ -266,7 +265,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
 
         // Process Sketch A (direct, half width)
         cout << "\nProcessing Sketch A (direct, only A)..." << endl;
-        ReSketchV2 sketch_A(config_A);
+        ReSketchV2 sketch_A(rs_config.depth, width / 2, shared_seeds, rs_config.kll_k, shared_partition_seed);
         timer.start();
         for (const auto &item : data_A) { sketch_A.update(item); }
         result.sketch_a_direct.process_time_s = timer.stop_s();
@@ -275,7 +274,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
 
         // Process Sketch B (direct, half width)
         cout << "\nProcessing Sketch B (direct, only B)..." << endl;
-        ReSketchV2 sketch_B(config_B);
+        ReSketchV2 sketch_B(rs_config.depth, width / 2, shared_seeds, rs_config.kll_k, shared_partition_seed);
         timer.start();
         for (const auto &item : data_B) { sketch_B.update(item); }
         result.sketch_b_direct.process_time_s = timer.stop_s();
@@ -285,15 +284,35 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         // Calculate accuracy comparisons
         cout << "\nCalculating accuracy metrics..." << endl;
 
-        // A' (from split) vs true on DA items
-        result.a_prime_vs_true_on_da.are = calculate_are_all_items(sketch_A_prime, true_freqs_A);
-        result.a_prime_vs_true_on_da.aae = calculate_aae_all_items(sketch_A_prime, true_freqs_A);
-        cout << "  A' (split) vs True on DA: ARE=" << result.a_prime_vs_true_on_da.are << ", AAE=" << result.a_prime_vs_true_on_da.aae << endl;
+        // Note: For A' and B', test on ALL items but route to correct partition
+        double total_rel_error_a_prime = 0.0, total_abs_error_a_prime = 0.0;
+        double total_rel_error_b_prime = 0.0, total_abs_error_b_prime = 0.0;
+        int count_a_prime = 0, count_b_prime = 0;
 
-        // B' (from split) vs true on DB items
-        result.b_prime_vs_true_on_db.are = calculate_are_all_items(sketch_B_prime, true_freqs_B);
-        result.b_prime_vs_true_on_db.aae = calculate_aae_all_items(sketch_B_prime, true_freqs_B);
-        cout << "  B' (split) vs True on DB: ARE=" << result.b_prime_vs_true_on_db.are << ", AAE=" << result.b_prime_vs_true_on_db.aae << endl;
+        for (const auto &[item, true_freq] : true_freqs_all) {
+            double est_freq;
+            if (sketch_A_prime.is_responsible_for(item)) {
+                // Item belongs to A' partition
+                est_freq = sketch_A_prime.estimate(item);
+                if (true_freq > 0) { total_rel_error_a_prime += std::abs(est_freq - true_freq) / true_freq; }
+                total_abs_error_a_prime += std::abs(est_freq - true_freq);
+                count_a_prime++;
+            } else {
+                // Item belongs to B' partition
+                est_freq = sketch_B_prime.estimate(item);
+                if (true_freq > 0) { total_rel_error_b_prime += std::abs(est_freq - true_freq) / true_freq; }
+                total_abs_error_b_prime += std::abs(est_freq - true_freq);
+                count_b_prime++;
+            }
+        }
+
+        result.a_prime_vs_true_on_da.are = count_a_prime > 0 ? total_rel_error_a_prime / count_a_prime : 0.0;
+        result.a_prime_vs_true_on_da.aae = count_a_prime > 0 ? total_abs_error_a_prime / count_a_prime : 0.0;
+        cout << "  A' (split) on its partition (" << count_a_prime << " items): ARE=" << result.a_prime_vs_true_on_da.are << ", AAE=" << result.a_prime_vs_true_on_da.aae << endl;
+
+        result.b_prime_vs_true_on_db.are = count_b_prime > 0 ? total_rel_error_b_prime / count_b_prime : 0.0;
+        result.b_prime_vs_true_on_db.aae = count_b_prime > 0 ? total_abs_error_b_prime / count_b_prime : 0.0;
+        cout << "  B' (split) on its partition (" << count_b_prime << " items): ARE=" << result.b_prime_vs_true_on_db.are << ", AAE=" << result.b_prime_vs_true_on_db.aae << endl;
 
         // A (direct) vs true on DA items: baseline
         result.a_vs_true_on_da.are = calculate_are_all_items(sketch_A, true_freqs_A);
@@ -325,7 +344,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
 
     // Insert timestamp before file extension
     string output_file = config.output_file;
-    size_t ext_pos = output_file.find_last_of('.');
+    uint32_t ext_pos = output_file.find_last_of('.');
     if (ext_pos != string::npos) {
         output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos);
     } else {
