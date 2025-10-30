@@ -114,7 +114,7 @@ vector<uint64_t> get_top_k_items(const map<uint64_t, uint64_t> &freqs, int k) {
     vector<pair<uint64_t, uint64_t>> sorted_freqs(freqs.begin(), freqs.end());
     sort(sorted_freqs.begin(), sorted_freqs.end(), [](const auto &a, const auto &b) { return a.second > b.second; });
     vector<uint64_t> top_items;
-    top_items.reserve(min((uint32_t) k, sorted_freqs.size()));
+    top_items.reserve(std::min(static_cast<size_t>(k), sorted_freqs.size()));
     for (int i = 0; i < k && i < sorted_freqs.size(); ++i) { top_items.push_back(sorted_freqs[i].first); }
     return top_items;
 }
