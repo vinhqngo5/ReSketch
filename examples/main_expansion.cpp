@@ -101,21 +101,31 @@ void export_to_json(const string &filename, const ExpansionConfig &config, const
     // Build JSON object
     json j;
 
+    // Metadata section
+    auto now = std::chrono::system_clock::now();
+    auto now_time_t = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_now;
+    gmtime_r(&now_time_t, &tm_now);
+    std::ostringstream timestamp;
+    timestamp << std::put_time(&tm_now, "%Y-%m-%dT%H:%M:%SZ");
+
+    j["metadata"] = {{"experiment_type", "expansion"}, {"timestamp", timestamp.str()}};
+
     // Config section
-    j["config"] = {{"initial_memory_kb", config.initial_memory_kb},
-                   {"expansion_interval", config.expansion_interval},
-                   {"memory_increment_kb", config.memory_increment_kb},
-                   {"repetitions", config.repetitions},
-                   {"dataset_type", config.dataset_type},
-                   {"total_items", config.total_items},
-                   {"stream_size", config.stream_size},
-                   {"stream_diversity", config.stream_diversity},
-                   {"zipf_param", config.zipf_param},
-                   {"countmin_depth", cm_config.depth},
-                   {"resketch_depth", rs_config.depth},
-                   {"resketch_kll_k", rs_config.kll_k},
-                   {"geometric_depth", gs_config.depth},
-                   {"dynamic_depth", ds_config.depth}};
+    j["config"]["experiment"] = {{"initial_memory_kb", config.initial_memory_kb},
+                                 {"expansion_interval", config.expansion_interval},
+                                 {"memory_increment_kb", config.memory_increment_kb},
+                                 {"repetitions", config.repetitions},
+                                 {"dataset_type", config.dataset_type},
+                                 {"total_items", config.total_items},
+                                 {"stream_size", config.stream_size},
+                                 {"stream_diversity", config.stream_diversity},
+                                 {"zipf_param", config.zipf_param}};
+
+    j["config"]["base_sketch_config"]["countmin"] = {{"depth", cm_config.depth}};
+    j["config"]["base_sketch_config"]["resketch"] = {{"depth", rs_config.depth}, {"kll_k", rs_config.kll_k}};
+    j["config"]["base_sketch_config"]["geometric"] = {{"depth", gs_config.depth}};
+    j["config"]["base_sketch_config"]["dynamic"] = {{"depth", ds_config.depth}};
 
     // Results section
     json results_json;
@@ -124,14 +134,14 @@ void export_to_json(const string &filename, const ExpansionConfig &config, const
 
         for (uint32_t rep = 0; rep < repetitions.size(); ++rep) {
             json rep_json;
-            rep_json["repetition"] = rep;
+            rep_json["repetition_id"] = rep;
 
             json checkpoints_array = json::array();
             for (const auto &cp : repetitions[rep]) {
                 json cp_json = {{"items_processed", cp.items_processed},
+                                {"memory_bytes", cp.memory_kb * 1024},
                                 {"throughput_mops", cp.throughput_mops},
                                 {"query_throughput_mops", cp.query_throughput_mops},
-                                {"memory_kb", cp.memory_kb},
                                 {"are", cp.are},
                                 {"aae", cp.aae}};
                 checkpoints_array.push_back(cp_json);

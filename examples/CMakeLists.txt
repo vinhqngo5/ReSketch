@@ -6,4 +6,13 @@ add_executable(sketch_benchmark main.cpp)
 target_link_libraries(sketch_benchmark PRIVATE frequency_summary_lib)
 
 add_executable(expansion_experiment main_expansion.cpp)
-target_link_libraries(expansion_experiment PRIVATE frequency_summary_lib)
+target_link_libraries(expansion_experiment PRIVATE experiment_common)
+
+add_executable(sensitivity_experiment main_sensitivity.cpp)
+target_link_libraries(sensitivity_experiment PRIVATE experiment_common)
+
+add_executable(merge_experiment main_merge.cpp)
+target_link_libraries(merge_experiment PRIVATE experiment_common)
+
+add_executable(split_experiment main_split.cpp)
+target_link_libraries(split_experiment PRIVATE experiment_common)
