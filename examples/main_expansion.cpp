@@ -31,6 +31,9 @@
 // Config Headers
 #include "frequency_summary/frequency_summary_config.hpp"
 
+// Common utilities
+#include "common.hpp"
+
 using namespace std;
 using json = nlohmann::json;
 
@@ -49,17 +52,17 @@ struct ExpansionConfig {
     string output_file = "output/expansion_results.json";
 
     static void add_params_to_config_parser(ExpansionConfig &config, ConfigParser &parser) {
-        parser.AddParameter(new UnsignedInt32Parameter("exp.initial_memory_kb", "32", &config.initial_memory_kb, false, "Initial memory budget in KB"));
-        parser.AddParameter(new UnsignedInt32Parameter("exp.expansion_interval", "100000", &config.expansion_interval, false, "Items between expansions"));
-        parser.AddParameter(new UnsignedInt32Parameter("exp.memory_increment_kb", "32", &config.memory_increment_kb, false, "Memory increment per expansion in KB"));
-        parser.AddParameter(new UnsignedInt32Parameter("exp.repetitions", "10", &config.repetitions, false, "Number of experiment repetitions"));
-        parser.AddParameter(new StringParameter("exp.dataset_type", "zipf", &config.dataset_type, false, "Dataset type: zipf or caida"));
-        parser.AddParameter(new StringParameter("exp.caida_path", "data/CAIDA/only_ip", &config.caida_path, false, "Path to CAIDA data file"));
-        parser.AddParameter(new UnsignedInt64Parameter("exp.total_items", "10000000", &config.total_items, false, "Total items to process (will repeat dataset if needed)"));
-        parser.AddParameter(new UnsignedInt64Parameter("exp.stream_size", "10000000", &config.stream_size, false, "Dataset size for zipf generation"));
-        parser.AddParameter(new UnsignedInt64Parameter("exp.stream_diversity", "1000000", &config.stream_diversity, false, "Unique items in stream (zipf)"));
-        parser.AddParameter(new FloatParameter("exp.zipf", "1.1", reinterpret_cast<float *>(&config.zipf_param), false, "Zipfian param 'a'"));
-        parser.AddParameter(new StringParameter("exp.output_file", "output/expansion_results.json", &config.output_file, false, "Output JSON file path"));
+        parser.AddParameter(new UnsignedInt32Parameter("app.initial_memory_kb", "32", &config.initial_memory_kb, false, "Initial memory budget in KB"));
+        parser.AddParameter(new UnsignedInt32Parameter("app.expansion_interval", "100000", &config.expansion_interval, false, "Items between expansions"));
+        parser.AddParameter(new UnsignedInt32Parameter("app.memory_increment_kb", "32", &config.memory_increment_kb, false, "Memory increment per expansion in KB"));
+        parser.AddParameter(new UnsignedInt32Parameter("app.repetitions", "10", &config.repetitions, false, "Number of experiment repetitions"));
+        parser.AddParameter(new StringParameter("app.dataset_type", "zipf", &config.dataset_type, false, "Dataset type: zipf or caida"));
+        parser.AddParameter(new StringParameter("app.caida_path", "data/CAIDA/only_ip", &config.caida_path, false, "Path to CAIDA data file"));
+        parser.AddParameter(new UnsignedInt64Parameter("app.total_items", "10000000", &config.total_items, false, "Total items to process (will repeat dataset if needed)"));
+        parser.AddParameter(new UnsignedInt64Parameter("app.stream_size", "10000000", &config.stream_size, false, "Dataset size for zipf generation"));
+        parser.AddParameter(new UnsignedInt64Parameter("app.stream_diversity", "1000000", &config.stream_diversity, false, "Unique items in stream (zipf)"));
+        parser.AddParameter(new FloatParameter("app.zipf", "1.1", reinterpret_cast<float *>(&config.zipf_param), false, "Zipfian param 'a'"));
+        parser.AddParameter(new StringParameter("app.output_file", "output/expansion_results.json", &config.output_file, false, "Output JSON file path"));
     }
 
     friend std::ostream &operator<<(std::ostream &os, const ExpansionConfig &config) {
@@ -90,115 +93,6 @@ struct Checkpoint {
     double are;
     double aae;
 };
-
-// Timer class to measure execution time
-class Timer {
-  public:
-    void start() { m_start = std::chrono::high_resolution_clock::now(); }
-    double stop_s() const {
-        auto end = std::chrono::high_resolution_clock::now();
-        return std::chrono::duration<double>(end - m_start).count();
-    }
-
-  private:
-    std::chrono::time_point<std::chrono::high_resolution_clock> m_start;
-};
-
-// Helper functions
-vector<uint64_t> generate_zipf_data(uint64_t size, uint64_t diversity, double a) {
-    vector<double> pdf(diversity);
-    double sum = 0.0;
-    for (uint64_t i = 1; i <= diversity; ++i) {
-        pdf[i - 1] = 1.0 / pow(static_cast<double>(i), a);
-        sum += pdf[i - 1];
-    }
-    for (uint64_t i = 0; i < diversity; ++i) { pdf[i] /= sum; }
-    std::discrete_distribution<uint64_t> dist(pdf.begin(), pdf.end());
-    std::mt19937_64 rng(std::random_device{}());
-    vector<uint64_t> data;
-    data.reserve(size);
-    for (uint64_t i = 0; i < size; ++i) { data.push_back(dist(rng)); }
-    return data;
-}
-
-vector<uint64_t> read_caida_data(const string &path, uint64_t max_items) {
-    vector<uint64_t> data;
-    ifstream file(path);
-    if (!file.is_open()) {
-        cerr << "Error: Cannot open CAIDA file: " << path << endl;
-        return data;
-    }
-
-    string line;
-    uint64_t count = 0;
-    while (getline(file, line) && count < max_items) {
-        uint64_t ip_as_int = 0;
-
-        unsigned int a, b, c, d;
-        if (sscanf(line.c_str(), "%u.%u.%u.%u", &a, &b, &c, &d) == 4) {
-            ip_as_int = ((uint64_t) a << 24) | ((uint64_t) b << 16) | ((uint64_t) c << 8) | (uint64_t) d;
-            data.push_back(ip_as_int);
-            count++;
-        } else {
-            stringstream ss(line);
-            if (ss >> ip_as_int) {
-                data.push_back(ip_as_int);
-                count++;
-            }
-        }
-    }
-    file.close();
-    cout << "Read " << data.size() << " items from CAIDA file." << endl;
-    return data;
-}
-
-template <typename SketchType> double calculate_are_all_items(const SketchType &sketch, const map<uint64_t, uint64_t> &true_freqs) {
-    if (true_freqs.empty()) return 0.0;
-    double total_rel_error = 0.0;
-    for (const auto &[item, true_freq] : true_freqs) {
-        double est_freq = sketch.estimate(item);
-        if (true_freq > 0) { total_rel_error += abs(est_freq - true_freq) / true_freq; }
-    }
-    return total_rel_error / true_freqs.size();
-}
-
-template <typename SketchType> double calculate_aae_all_items(const SketchType &sketch, const map<uint64_t, uint64_t> &true_freqs) {
-    if (true_freqs.empty()) return 0.0;
-    double total_abs_error = 0.0;
-    for (const auto &[item, true_freq] : true_freqs) {
-        double est_freq = sketch.estimate(item);
-        total_abs_error += abs(est_freq - true_freq);
-    }
-    return total_abs_error / true_freqs.size();
-}
-
-uint32_t calculate_width_from_memory_cm(uint64_t memory_bytes, uint32_t depth) {
-    if (depth == 0) return 0;
-    return CountMinSketch::calculate_max_width(memory_bytes, depth);
-}
-
-uint32_t calculate_width_from_memory_resketch(uint64_t memory_bytes, uint32_t depth, uint32_t kll_k) {
-    if (depth == 0) return 0;
-    return ReSketchV2::calculate_max_width(memory_bytes, depth, kll_k);
-}
-
-uint32_t calculate_width_from_memory_geometric(uint64_t memory_bytes, uint32_t depth) {
-    if (depth == 0) return 0;
-    return GeometricSketchWrapper::calculate_max_width(memory_bytes, depth);
-}
-
-uint32_t calculate_width_from_memory_dynamic(uint64_t memory_bytes, uint32_t depth) {
-    if (depth == 0) return 0;
-    return DynamicSketchWrapper::calculate_max_width(memory_bytes, depth);
-}
-
-void create_directory(const string &path) {
-    uint32_t pos = path.find_last_of('/');
-    if (pos != string::npos) {
-        string dir = path.substr(0, pos);
-        mkdir(dir.c_str(), 0755);
-    }
-}
 
 void export_to_json(const string &filename, const ExpansionConfig &config, const CountMinConfig &cm_config, const ReSketchConfig &rs_config, const GeometricSketchConfig &gs_config,
                     const DynamicSketchConfig &ds_config, const map<string, vector<vector<Checkpoint>>> &all_results) {
@@ -484,7 +378,26 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
         }
     }
 
-    export_to_json(config.output_file, config, cm_config, rs_config, gs_config, ds_config, all_results);
+    // Add timestamp to output filename
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_now;
+    localtime_r(&time_t_now, &tm_now);
+
+    std::ostringstream timestamp_stream;
+    timestamp_stream << std::put_time(&tm_now, "%Y%m%d_%H%M%S");
+    string timestamp = timestamp_stream.str();
+
+    // Insert timestamp before file extension
+    string output_file = config.output_file;
+    size_t ext_pos = output_file.find_last_of('.');
+    if (ext_pos != string::npos) {
+        output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos);
+    } else {
+        output_file += "_" + timestamp;
+    }
+
+    export_to_json(output_file, config, cm_config, rs_config, gs_config, ds_config, all_results);
 }
 
 int main(int argc, char **argv) {
