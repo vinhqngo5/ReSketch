@@ -85,3 +85,36 @@ void create_directory(const std::string &path) {
         mkdir(dir.c_str(), 0755);
     }
 }
+
+std::map<uint64_t, uint64_t> get_true_freqs(const std::vector<uint64_t> &data) {
+    std::map<uint64_t, uint64_t> freqs;
+    for (const auto &item : data) { freqs[item]++; }
+    return freqs;
+}
+
+std::vector<uint64_t> get_top_k_items(const std::map<uint64_t, uint64_t> &freqs, int k) {
+    std::vector<std::pair<uint64_t, uint64_t>> sorted_freqs(freqs.begin(), freqs.end());
+    std::sort(sorted_freqs.begin(), sorted_freqs.end(), [](const auto &a, const auto &b) { return a.second > b.second; });
+    std::vector<uint64_t> top_items;
+    top_items.reserve(std::min(static_cast<size_t>(k), sorted_freqs.size()));
+    for (int i = 0; i < k && i < static_cast<int>(sorted_freqs.size()); ++i) { top_items.push_back(sorted_freqs[i].first); }
+    return top_items;
+}
+
+std::vector<uint64_t> get_random_items(const std::map<uint64_t, uint64_t> &freqs, int count) {
+    std::vector<uint64_t> all_items;
+    all_items.reserve(freqs.size());
+    for (const auto &[item, freq] : freqs) { all_items.push_back(item); }
+
+    // Shuffle and take first 'count' items
+    std::random_device rd;
+    std::mt19937_64 rng(rd());
+    std::shuffle(all_items.begin(), all_items.end(), rng);
+
+    int actual_count = std::min(count, static_cast<int>(all_items.size()));
+    return std::vector<uint64_t>(all_items.begin(), all_items.begin() + actual_count);
+}
+
+void print_frequency_comparison_impl(uint64_t item, const std::map<uint64_t, uint64_t> &true_freqs, const std::vector<std::string> &sketch_names, size_t idx) {
+    // Base case: do nothing
+}

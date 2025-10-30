@@ -3,7 +3,7 @@ target_link_libraries(experiment_common PUBLIC frequency_summary_lib)
 target_include_directories(experiment_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(sketch_benchmark main.cpp)
-target_link_libraries(sketch_benchmark PRIVATE frequency_summary_lib)
+target_link_libraries(sketch_benchmark PRIVATE experiment_common)
 
 add_executable(expansion_experiment main_expansion.cpp)
 target_link_libraries(expansion_experiment PRIVATE experiment_common)
