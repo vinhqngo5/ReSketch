@@ -169,51 +169,52 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
 
         SplitResult result;
 
-        // Generate disjoint datasets
-        vector<uint64_t> data_A, data_B;
+        // Generate shared seeds for all sketches to ensure consistent hashing
+        std::mt19937_64 rng(std::random_device{}());
+        std::uniform_int_distribution<uint32_t> dist;
 
+        uint32_t shared_partition_seed = dist(rng);
+        std::vector<uint32_t> shared_seeds;
+        shared_seeds.reserve(rs_config.depth);
+        for (uint32_t i = 0; i < rs_config.depth; ++i) { shared_seeds.push_back(dist(rng)); }
+
+        // Calculate split point for hash-based partitioning
+        uint64_t split_point = static_cast<uint64_t>((static_cast<long double>(width / 2) / width) * std::numeric_limits<uint64_t>::max());
+
+        // Generate full dataset first
+        vector<uint64_t> full_data;
         if (config.dataset_type == "zipf") {
             cout << "Generating Zipf data..." << endl;
-            uint64_t half_diversity = config.stream_diversity / 2;
-            uint64_t half_stream = config.stream_size / 2;
-
-            // Generate DA: items in range [0, half_diversity)
-            data_A = generate_zipf_data(half_stream, half_diversity, config.zipf_param);
-
-            // Generate DB: items in range [half_diversity, stream_diversity)
-            vector<uint64_t> data_B_raw = generate_zipf_data(half_stream, half_diversity, config.zipf_param);
-            data_B.reserve(data_B_raw.size());
-            for (const auto &item : data_B_raw) { data_B.push_back(item + half_diversity); }
-
-            cout << "  DA: " << data_A.size() << " items from range [0, " << (half_diversity - 1) << "]" << endl;
-            cout << "  DB: " << data_B.size() << " items from range [" << half_diversity << ", " << (config.stream_diversity - 1) << "]" << endl;
+            full_data = generate_zipf_data(config.stream_size, config.stream_diversity, config.zipf_param);
         } else if (config.dataset_type == "caida") {
             cout << "Reading CAIDA data..." << endl;
-            vector<uint64_t> full_data = read_caida_data(config.caida_path, config.stream_size);
+            full_data = read_caida_data(config.caida_path, config.stream_size);
             if (full_data.empty()) {
                 cerr << "Error: Failed to read CAIDA data. Skipping repetition." << endl;
                 continue;
             }
-
-            // Split CAIDA data into disjoint sets based on item hash (odd/even)
-            // This ensures data_A and data_B have completely disjoint item sets
-            data_A.reserve(full_data.size() / 2);
-            data_B.reserve(full_data.size() / 2);
-
-            for (const auto &item : full_data) {
-                if (item % 2 == 0) {
-                    data_A.push_back(item);
-                } else {
-                    data_B.push_back(item);
-                }
-            }
-
-            cout << "  DA: " << data_A.size() << " items (even IPs)" << endl;
-            cout << "  DB: " << data_B.size() << " items (odd IPs)" << endl;
         } else {
             cerr << "Error: Unknown dataset type: " << config.dataset_type << ". Skipping repetition." << endl;
             continue;
         }
+
+        // Split data based on hash domain (same as split operation)
+        vector<uint64_t> data_A, data_B;
+        data_A.reserve(full_data.size() / 2);
+        data_B.reserve(full_data.size() / 2);
+
+        for (const auto &item : full_data) {
+            uint64_t partition_hash = ReSketchV2::compute_partition_hash(item, shared_partition_seed);
+            if (partition_hash < split_point) {
+                data_A.push_back(item);
+            } else {
+                data_B.push_back(item);
+            }
+        }
+
+        cout << "  Full dataset: " << full_data.size() << " items" << endl;
+        cout << "  DA (hash < split_point): " << data_A.size() << " items" << endl;
+        cout << "  DB (hash >= split_point): " << data_B.size() << " items" << endl;
 
         // Calculate true frequencies for each dataset
         map<uint64_t, uint64_t> true_freqs_A, true_freqs_B, true_freqs_all;
@@ -227,15 +228,6 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         }
 
         cout << "  Unique items: " << true_freqs_A.size() << " (A), " << true_freqs_B.size() << " (B), " << true_freqs_all.size() << " (All)" << endl;
-
-        // Generate shared seeds for all sketches to ensure consistent hashing
-        std::mt19937_64 rng(std::random_device{}());
-        std::uniform_int_distribution<uint32_t> dist;
-
-        uint32_t shared_partition_seed = dist(rng);
-        std::vector<uint32_t> shared_seeds;
-        shared_seeds.reserve(rs_config.depth);
-        for (uint32_t i = 0; i < rs_config.depth; ++i) { shared_seeds.push_back(dist(rng)); }
 
         // Process Sketch C (full width, processes both A and B)
         cout << "\nProcessing Sketch C (full, A+B)..." << endl;
