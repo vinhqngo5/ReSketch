@@ -89,6 +89,9 @@
     "span": "cpp",
     "stop_token": "cpp",
     "thread": "cpp",
-    "text_encoding": "cpp"
+    "text_encoding": "cpp",
+    "csignal": "cpp",
+    "*.ipp": "cpp",
+    "valarray": "cpp"
   }
 }

@@ -16,3 +16,6 @@ target_link_libraries(merge_experiment PRIVATE experiment_common)
 
 add_executable(split_experiment main_split.cpp)
 target_link_libraries(split_experiment PRIVATE experiment_common)
+
+add_executable(shrinking_experiment main_shrinking.cpp)
+target_link_libraries(shrinking_experiment PRIVATE experiment_common)

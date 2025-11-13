@@ -8,6 +8,7 @@ venv/
 experiments/
 output/
 output_old/
+old_output/
 
 
 # fonts
@@ -49,3 +50,6 @@ $RECYCLE.BIN/
 .TemporaryItems
 ehthumbs.db
 Thumbs.db
+
+# Python cache
+__pycache__/
