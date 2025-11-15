@@ -1,0 +1,102 @@
+# DAG execution is sequential, one at a time
+# Evaluation strategy: Only evaluate active sketches (currently ingesting data)
+# Note: 
+# - Split operation only supports two output sketches. More can be done through chaining.
+# - memory_budget_kb in merge operation is ignored; memory is sum of source sketches.
+
+metadata:
+  name: "resketch_dag_demo"
+  repetitions: 1
+  output_file: "output/dag_results.json"
+
+datasets:
+  caida:
+    dataset_type: "caida"
+    caida_path: "data/CAIDA/only_ip"
+    stream_size: 10000000
+    
+  zipf_1.1:
+    dataset_type: "zipf"
+    stream_size: 10000000
+    stream_diversity: 10000000
+    zipf_param: 1.1
+    
+  zipf_1.2:
+    dataset_type: "zipf"
+    stream_size: 10000000
+    stream_diversity: 10000000
+    zipf_param: 1.2
+
+sketch_config:
+  depth: 4
+  kll_k: 30
+
+evaluation:
+  metrics: [throughput, query_throughput, are, aae, latency]
+  checkpoint_intervals: 100000
+
+sketches:
+  A:
+    operation: "create"
+    memory_budget_kb: 1024
+    datasets:
+      - {dataset: "caida", num_items: 1000000}
+    
+  B:
+    operation: "expand"
+    source: "A"
+    memory_budget_kb: 2560
+    datasets:
+      - {dataset: "zipf_1.1", num_items: 1000000, start_offset: 0}
+      - {dataset: "zipf_1.2", num_items: 1000000, start_offset: 5000000}
+    
+  C:
+    operation: "shrink"
+    source: "B"
+    memory_budget_kb: 700
+    datasets:
+      - {dataset: "zipf_1.1", num_items: 1000000}
+    
+  D:
+    operation: "create"
+    memory_budget_kb: 1536
+    datasets:
+      - {dataset: "zipf_1.2", num_items: 1000000}
+    
+  E:
+    operation: "merge"
+    sources: ["C", "D"]
+    memory_budget_kb: 2236
+    datasets:
+      - {dataset: "caida", num_items: 3000000}
+    
+  F:
+    operation: "split"
+    source: "E"
+    memory_budget_kb: 1024
+    datasets:
+      - {dataset: "zipf_1.1", num_items: 1000000}
+    
+  G:
+    operation: "split"
+    source: "E"
+    memory_budget_kb: 1228
+    datasets:
+      - {dataset: "zipf_1.2", num_items: 1000000}
+
+  H:
+    operation: "expand"
+    source: "G"
+    memory_budget_kb: 2000
+    datasets:
+      - {dataset: "zipf_1.2", num_items: 1000000}
+
+  I:
+    operation: "merge"
+    sources: ["F", "H"]
+    memory_budget_kb: 3024
+    datasets:
+      - {dataset: "caida", num_items: 2000000}
+
+other_options:
+  master_seed: 42
