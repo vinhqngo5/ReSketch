@@ -92,6 +92,7 @@
     "text_encoding": "cpp",
     "csignal": "cpp",
     "*.ipp": "cpp",
-    "valarray": "cpp"
+    "valarray": "cpp",
+    "typeindex": "cpp"
   }
 }
