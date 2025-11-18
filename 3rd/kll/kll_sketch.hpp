@@ -504,6 +504,14 @@ class kll_sketch {
      */
     quantiles_sorted_view<T, C, A> get_sorted_view() const;
 
+    // Additional methods for ReSketch integration
+    uint8_t get_num_levels() const;
+    double estimate(const T &item) const;
+    double get_count_in_range(const T &start_item, const T &end_item) const;
+    kll_sketch rebuild(const T &start_item, const T &end_item) const;
+    template <typename Func> void for_each_summarized_item(Func func) const;
+    void update_weighted(const T &item, uint64_t weight, bool compress = true);
+
   private:
     /* Serialized sketch layout:
      *  Addr:

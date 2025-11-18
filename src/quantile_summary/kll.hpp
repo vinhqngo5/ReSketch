@@ -10,15 +10,15 @@
 #include "quantile_summary.hpp"
 #include "quantile_summary_config.hpp"
 
-class KLL : public QuantileSummary, public FrequencySummary {
+class KLLXX : public QuantileSummary, public FrequencySummary {
   public:
-    explicit KLL(const KLLConfig &config) : m_config(config), m_n(0), m_c(2.0 / 3.0), m_rng(std::random_device{}()), m_dist(0.5) { m_compactors.emplace_back(); }
+    explicit KLLXX(const KLLConfig &config) : m_config(config), m_n(0), m_c(2.0 / 3.0), m_rng(std::random_device{}()), m_dist(0.5) { m_compactors.emplace_back(); }
 
-    KLL() : m_n(0), m_c(2.0 / 3.0), m_rng(std::random_device{}()), m_dist(0.5) { m_config.k = 0; }
+    KLLXX() : m_n(0), m_c(2.0 / 3.0), m_rng(std::random_device{}()), m_dist(0.5) { m_config.k = 0; }
 
     // Copy constructor and assignment
-    KLL(const KLL &other) : m_config(other.m_config), m_n(other.m_n), m_c(other.m_c), m_compactors(other.m_compactors), m_rng(std::random_device{}()), m_dist(other.m_dist) {}
-    KLL &operator=(const KLL &other) {
+    KLLXX(const KLLXX &other) : m_config(other.m_config), m_n(other.m_n), m_c(other.m_c), m_compactors(other.m_compactors), m_rng(std::random_device{}()), m_dist(other.m_dist) {}
+    KLLXX &operator=(const KLLXX &other) {
         if (this == &other) return *this;
         m_config = other.m_config;
         m_n = other.m_n;
@@ -28,8 +28,8 @@ class KLL : public QuantileSummary, public FrequencySummary {
     }
 
     // Move constructor and assignment
-    KLL(KLL &&other) noexcept = default;
-    KLL &operator=(KLL &&other) noexcept {
+    KLLXX(KLLXX &&other) noexcept = default;
+    KLLXX &operator=(KLLXX &&other) noexcept {
         if (this != &other) {
             m_config = std::move(other.m_config);
             m_n = std::move(other.m_n);
@@ -47,13 +47,13 @@ class KLL : public QuantileSummary, public FrequencySummary {
     }
 
     void merge(const QuantileSummary &other) override {
-        const auto *other_kll = dynamic_cast<const KLL *>(&other);
-        if (!other_kll) { throw std::invalid_argument("Can only merge KLL with another KLL."); }
+        const auto *other_kll = dynamic_cast<const KLLXX *>(&other);
+        if (!other_kll) { throw std::invalid_argument("Can only merge KLLXX with another KLLXX."); }
         merge(*other_kll);
     }
 
-    void merge(const KLL &other_kll) {
-        if (m_config.k != other_kll.m_config.k) { throw std::invalid_argument("KLL sketches must have the same k parameter to be merged."); }
+    void merge(const KLLXX &other_kll) {
+        if (m_config.k != other_kll.m_config.k) { throw std::invalid_argument("KLLXX sketches must have the same k parameter to be merged."); }
         m_n += other_kll.m_n;
         uint32_t max_level = std::max(m_compactors.size(), other_kll.m_compactors.size());
         if (m_compactors.size() < max_level) m_compactors.resize(max_level);
@@ -99,8 +99,8 @@ class KLL : public QuantileSummary, public FrequencySummary {
         return estimated_count;
     }
 
-    KLL rebuild(uint64_t start_h, uint64_t end_h) const {
-        KLL new_sketch(m_config);
+    KLLXX rebuild(uint64_t start_h, uint64_t end_h) const {
+        KLLXX new_sketch(m_config);
         if (!m_compactors.empty()) new_sketch.m_compactors.resize(m_compactors.size());
 
         for (uint32_t i = 0; i < m_compactors.size(); ++i) {
@@ -161,7 +161,7 @@ class KLL : public QuantileSummary, public FrequencySummary {
     }
 
     static uint32_t calculate_max_k(uint32_t total_memory_bytes, double c = 2.0 / 3.0) {
-        const uint32_t item_size = sizeof(uint64_t);
+        const uint32_t item_size = sizeof(uint32_t);
         if (total_memory_bytes < item_size || (1.0 - c) <= 0) { return 0; }
 
         uint32_t max_storable_items = total_memory_bytes / item_size;
@@ -170,8 +170,8 @@ class KLL : public QuantileSummary, public FrequencySummary {
         return static_cast<uint32_t>(std::floor(k));
     }
 
-    friend std::ostream &operator<<(std::ostream &os, const KLL &kll) {
-        os << "KLL Sketch:" << std::endl;
+    friend std::ostream &operator<<(std::ostream &os, const KLLXX &kll) {
+        os << "KLLXX Sketch:" << std::endl;
         os << "  k: " << kll.m_config.k << std::endl;
         os << "  count: " << kll.m_n << std::endl;
         os << "  levels: " << kll.m_compactors.size() << std::endl;

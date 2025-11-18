@@ -40,12 +40,12 @@ struct ShrinkingConfig {
     uint32_t initial_memory_kb = 160;   // Starting memory (e.g., 1.6MB)
     uint32_t max_memory_kb = 640;       // Maximum memory during warmup (e.g., 6.4MB)
     uint32_t final_memory_kb = 32;
-    uint32_t shrinking_interval = 10000 / 8;
-    uint32_t memory_decrement_kb = 32 / 8;
+    uint32_t shrinking_interval = 100000;
+    uint32_t memory_decrement_kb = 32;
     uint32_t repetitions = 10;
     string dataset_type = "zipf";   // "zipf" or "caida"
     string caida_path = "data/CAIDA/only_ip";
-    uint64_t total_items = 10000000;   // Total items to process during shrinking phase
+    uint64_t total_items = 2000000;   // Total items to process during shrinking phase
     uint64_t stream_size = 10000000;
     uint64_t stream_diversity = 10000000;
     double zipf_param = 1.1;
@@ -55,12 +55,12 @@ struct ShrinkingConfig {
         parser.AddParameter(new UnsignedInt32Parameter("app.initial_memory_kb", "160", &config.initial_memory_kb, false, "Initial memory budget in KB"));
         parser.AddParameter(new UnsignedInt32Parameter("app.max_memory_kb", "640", &config.max_memory_kb, false, "Maximum memory during warmup in KB"));
         parser.AddParameter(new UnsignedInt32Parameter("app.final_memory_kb", "32", &config.final_memory_kb, false, "Final minimum memory in KB"));
-        parser.AddParameter(new UnsignedInt32Parameter("app.shrinking_interval", "1250", &config.shrinking_interval, false, "Items between shrinking operations"));
-        parser.AddParameter(new UnsignedInt32Parameter("app.memory_decrement_kb", "4", &config.memory_decrement_kb, false, "Memory decrement per shrinking step in KB"));
+        parser.AddParameter(new UnsignedInt32Parameter("app.shrinking_interval", "100000", &config.shrinking_interval, false, "Items between shrinking operations"));
+        parser.AddParameter(new UnsignedInt32Parameter("app.memory_decrement_kb", "32", &config.memory_decrement_kb, false, "Memory decrement per shrinking step in KB"));
         parser.AddParameter(new UnsignedInt32Parameter("app.repetitions", "10", &config.repetitions, false, "Number of experiment repetitions"));
         parser.AddParameter(new StringParameter("app.dataset_type", "zipf", &config.dataset_type, false, "Dataset type: zipf or caida"));
         parser.AddParameter(new StringParameter("app.caida_path", "data/CAIDA/only_ip", &config.caida_path, false, "Path to CAIDA data file"));
-        parser.AddParameter(new UnsignedInt64Parameter("app.total_items", "10000000", &config.total_items, false, "Total items to process during shrinking phase"));
+        parser.AddParameter(new UnsignedInt64Parameter("app.total_items", "2000000", &config.total_items, false, "Total items to process during shrinking phase"));
         parser.AddParameter(new UnsignedInt64Parameter("app.stream_size", "10000000", &config.stream_size, false, "Dataset size for zipf generation"));
         parser.AddParameter(new UnsignedInt64Parameter("app.stream_diversity", "1000000", &config.stream_diversity, false, "Unique items in stream (zipf)"));
         parser.AddParameter(new FloatParameter("app.zipf", "1.1", reinterpret_cast<float *>(&config.zipf_param), false, "Zipfian param 'a'"));

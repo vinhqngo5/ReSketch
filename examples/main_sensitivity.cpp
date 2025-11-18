@@ -48,7 +48,7 @@ struct SensitivityConfig {
     string output_file = "output/sensitivity_results.json";
 
     // k values to test for ReSketch
-    vector<uint32_t> k_values = {5, 10, 30, 50, 100};
+    vector<uint32_t> k_values = {8, 10, 30, 50, 100};
     // depth values to test for ReSketch
     vector<uint32_t> depth_values = {2, 4, 8};
 

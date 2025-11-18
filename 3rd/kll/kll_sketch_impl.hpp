@@ -625,11 +625,11 @@ template <typename T, typename C, typename A> template <typename O> void kll_ske
     auto tmp_items_deleter = [tmp_num_items, &alloc](T *ptr) { alloc.deallocate(ptr, tmp_num_items); };   // no destructor needed
     const std::unique_ptr<T, decltype(tmp_items_deleter)> workbuf(allocator_.allocate(tmp_num_items), tmp_items_deleter);
     const uint8_t ub = kll_helper::ub_on_num_levels(final_n);
-    const size_t work_levels_size = ub + 2;   // ub+1 does not work
+    // const size_t work_levels_size = ub + 2;   // ub+1 does not work
+    const uint8_t provisional_num_levels = std::max(num_levels_, other.num_levels_);
+    const size_t work_levels_size = std::max(static_cast<size_t>(ub + 2), static_cast<size_t>(provisional_num_levels + 2));
     vector_u32 worklevels(work_levels_size, 0, allocator_);
     vector_u32 outlevels(work_levels_size, 0, allocator_);
-
-    const uint8_t provisional_num_levels = std::max(num_levels_, other.num_levels_);
 
     populate_work_arrays(std::forward<O>(other), workbuf.get(), worklevels.data(), provisional_num_levels);
 
@@ -637,7 +637,7 @@ template <typename T, typename C, typename A> template <typename O> void kll_ske
         kll_helper::general_compress<T, C>(k_, m_, provisional_num_levels, workbuf.get(), worklevels.data(), outlevels.data(), is_level_zero_sorted_);
 
     // ub can sometimes be much bigger
-    if (result.final_num_levels > ub) throw std::logic_error("merge error");
+    if (result.final_num_levels > work_levels_size) throw std::logic_error("merge error");
 
     // now we need to transfer the results back into "this" sketch
     if (result.final_capacity != items_size_) {
@@ -847,6 +847,119 @@ template <typename T, typename C, typename A> bool kll_sketch<T, C, A>::const_it
 template <typename T, typename C, typename A> auto kll_sketch<T, C, A>::const_iterator::operator*() const -> reference { return value_type(items[index], weight); }
 
 template <typename T, typename C, typename A> auto kll_sketch<T, C, A>::const_iterator::operator->() const -> pointer { return **this; }
+
+// Additional method implementations for ReSketch integration
+
+template <typename T, typename C, typename A> uint8_t kll_sketch<T, C, A>::get_num_levels() const { return num_levels_; }
+
+template <typename T, typename C, typename A> double kll_sketch<T, C, A>::estimate(const T &item) const {
+    if (is_empty()) return 0.0;
+
+    double rank_le = get_rank(item, true);    // inclusive
+    double rank_lt = get_rank(item, false);   // exclusive
+
+    return (rank_le - rank_lt) * n_;
+}
+
+template <typename T, typename C, typename A> double kll_sketch<T, C, A>::get_count_in_range(const T &start_item, const T &end_item) const {
+    if (is_empty()) return 0.0;
+    if (!comparator_(start_item, end_item) && start_item != end_item) return 0.0;
+
+    double rank_end = get_rank(end_item, true);
+    double rank_start = get_rank(start_item, true);
+
+    return (rank_end - rank_start) * n_;
+}
+
+template <typename T, typename C, typename A> kll_sketch<T, C, A> kll_sketch<T, C, A>::rebuild(const T &start_item, const T &end_item) const {
+    kll_sketch<T, C, A> new_sketch(k_, comparator_, allocator_);
+    if (is_empty()) return new_sketch;
+
+    // First pass: count matching items to determine allocation size
+    uint32_t total_items = 0;
+    for (uint8_t level = 0; level < num_levels_; ++level) {
+        for (uint32_t i = levels_[level]; i < levels_[level + 1]; ++i) {
+            const T &item = items_[i];
+            if (comparator_(start_item, item) && (comparator_(item, end_item) || item == end_item)) { total_items++; }
+        }
+    }
+    if (total_items == 0) return new_sketch;
+
+    // Allocate exact space needed
+    A alloc_copy = allocator_;
+    new_sketch.num_levels_ = num_levels_;
+    new_sketch.items_size_ = total_items;
+    new_sketch.items_ = alloc_copy.allocate(total_items);
+    new_sketch.levels_ = vector_u32(num_levels_ + 1, 0, allocator_);
+
+    // Second pass: copy matching items and compute n, min, max inline
+    uint32_t pos = 0;
+    for (uint8_t level = 0; level < num_levels_; ++level) {
+        new_sketch.levels_[level] = pos;
+        for (uint32_t i = levels_[level]; i < levels_[level + 1]; ++i) {
+            const T &item = items_[i];
+            if (comparator_(start_item, item) && (comparator_(item, end_item) || item == end_item)) {
+                new (&new_sketch.items_[pos]) T(item);
+                // Update min/max as we go
+                if (pos == 0) {
+                    new_sketch.min_item_.emplace(item);
+                    new_sketch.max_item_.emplace(item);
+                } else {
+                    if (comparator_(item, *new_sketch.min_item_)) *new_sketch.min_item_ = item;
+                    if (comparator_(*new_sketch.max_item_, item)) *new_sketch.max_item_ = item;
+                }
+                pos++;
+            }
+        }
+        // Compute n incrementally: add (level_size * 2^level) to n
+        new_sketch.n_ += (pos - new_sketch.levels_[level]) * (1ULL << level);
+    }
+    new_sketch.levels_[num_levels_] = pos;
+    new_sketch.is_level_zero_sorted_ = false;
+    new_sketch.min_k_ = k_;
+
+    return new_sketch;
+}
+
+template <typename T, typename C, typename A> template <typename Func> void kll_sketch<T, C, A>::for_each_summarized_item(Func func) const {
+    if (is_empty()) return;
+
+    for (uint8_t level = 0; level < num_levels_; ++level) {
+        uint64_t weight = 1ULL << level;
+        uint32_t from = levels_[level];
+        uint32_t to = levels_[level + 1];
+
+        for (uint32_t i = from; i < to; ++i) { func(items_[i], weight); }
+    }
+}
+
+template <typename T, typename C, typename A> void kll_sketch<T, C, A>::update_weighted(const T &item, uint64_t weight, bool compress) {
+    if (weight == 0) return;
+
+    if (compress) {
+        for (uint64_t i = 0; i < weight; ++i) { update(item); }
+    } else {
+        for (uint64_t i = 0; i < weight; ++i) { update(item); }
+    }
+
+    // TODO: implement weighted update without compression
+    // else {
+    //     n_ += weight;
+    //     uint8_t level = 0;
+    //     uint64_t remaining_weight = weight;
+
+    //     while (remaining_weight > 0) {
+    //         if (remaining_weight & 1) {
+    //             const uint32_t index = --levels_[level];
+    //             new (&items_[index]) T(item);
+    //             update_min_max(item);
+    //             if (level == 0) { is_level_zero_sorted_ = false; }
+    //         }
+    //         remaining_weight >>= 1;
+    //         level++;
+    //     }
+    // }
+}
 
 } /* namespace datasketches */
 
