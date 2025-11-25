@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <vector>
 
+// using KLL = KLLXX;
 class ReSketchV2 : public FrequencySummary {
   private:
     struct Bucket {
@@ -163,22 +164,58 @@ class ReSketchV2 : public FrequencySummary {
 
         uint64_t split_point = static_cast<uint64_t>((static_cast<long double>(width_1) / (width_1 + width_2)) * std::numeric_limits<uint64_t>::max());
 
-        for (uint32_t i = 0; i < sketch.m_depth; ++i) {
-            for (uint32_t j = 0; j < sketch.m_width; ++j) {
-                const auto &kll = sketch.m_buckets[i][j].q_sketch;
-                kll.for_each_summarized_item([&](uint64_t h, uint64_t weight) {
-                    uint64_t v = sketch._recover_partition_hash(h, sketch.m_seeds[i]);
+        // Process each row
+        for (uint32_t row = 0; row < sketch.m_depth; ++row) {
+            // std::cout << "\n=== Processing Row " << row << " ===" << std::endl;
 
-                    if (v < split_point) {
-                        uint32_t id1 = _find_bucket_id(h, s1.m_rings[i]);
-                        s1.m_buckets[i][id1].count += weight;
-                        s1.m_buckets[i][id1].q_sketch.update(h, weight, false);
+            // Print original KLLs before split
+            {
+                // std::cout << "BEFORE SPLIT - Original KLLs:" << std::endl;
+                // for (uint32_t old_bucket_id = 0; old_bucket_id < sketch.m_width; ++old_bucket_id) {
+                //     _print_kll_details("  ", old_bucket_id, sketch.m_buckets[row][old_bucket_id].q_sketch);
+                // }
+            }
+
+            // Step 1: Extract all items with weights from all KLLs in this row -> vector of (item, weight) pairs
+            std::map<uint32_t, std::vector<std::pair<uint64_t, uint64_t>>> s1_bucket_items;
+            std::map<uint32_t, std::vector<std::pair<uint64_t, uint64_t>>> s2_bucket_items;
+
+            for (uint32_t old_bucket_id = 0; old_bucket_id < sketch.m_width; ++old_bucket_id) {
+                const auto &kll = sketch.m_buckets[row][old_bucket_id].q_sketch;
+
+                // Step 2: Extract and partition items based on partition hash
+                kll.for_each_summarized_item([&](uint64_t item, uint64_t weight) {
+                    // Recover the partition hash from the placement hash
+                    uint64_t partition_hash = sketch._recover_partition_hash(item, sketch.m_seeds[row]);
+
+                    // Determine which sketch this item belongs to based on split point
+                    if (partition_hash < split_point) {
+                        uint32_t new_bucket_id = _find_bucket_id(item, s1.m_rings[row]);
+                        s1_bucket_items[new_bucket_id].emplace_back(item, weight);
+                        s1.m_buckets[row][new_bucket_id].count += weight;
                     } else {
-                        uint32_t id2 = _find_bucket_id(h, s2.m_rings[i]);
-                        s2.m_buckets[i][id2].count += weight;
-                        s2.m_buckets[i][id2].q_sketch.update(h, weight, false);
+                        uint32_t new_bucket_id = _find_bucket_id(item, s2.m_rings[row]);
+                        s2_bucket_items[new_bucket_id].emplace_back(item, weight);
+                        s2.m_buckets[row][new_bucket_id].count += weight;
                     }
                 });
+            }
+
+            // Step 3: Construct new KLLs from the partitioned items
+            for (auto &[bucket_id, weighted_items] : s1_bucket_items) {
+                if (!weighted_items.empty()) { s1.m_buckets[row][bucket_id].q_sketch = KLL::construct_from_weighted_items(weighted_items, sketch.m_kll_config); }
+            }
+            for (auto &[bucket_id, weighted_items] : s2_bucket_items) {
+                if (!weighted_items.empty()) { s2.m_buckets[row][bucket_id].q_sketch = KLL::construct_from_weighted_items(weighted_items, sketch.m_kll_config); }
+            }
+
+            // Print new KLLs after split
+            {
+                // std::cout << "\nAFTER SPLIT - S1 KLLs (width=" << width_1 << "):" << std::endl;
+                // for (uint32_t bucket_id = 0; bucket_id < width_1; ++bucket_id) { _print_kll_details("  ", bucket_id, s1.m_buckets[row][bucket_id].q_sketch); }
+
+                // std::cout << "\nAFTER SPLIT - S2 KLLs (width=" << width_2 << "):" << std::endl;
+                // for (uint32_t bucket_id = 0; bucket_id < width_2; ++bucket_id) { _print_kll_details("  ", bucket_id, s2.m_buckets[row][bucket_id].q_sketch); }
             }
         }
 
@@ -213,6 +250,32 @@ class ReSketchV2 : public FrequencySummary {
     const std::vector<std::pair<uint64_t, uint64_t>> &get_partition_ranges() const { return m_partition_ranges; }
 
   private:
+    // Helper function to print KLL details by level
+    static void _print_kll_details(const std::string &label, uint32_t bucket_id, const KLL &kll) {
+        std::cout << label << " Bucket " << bucket_id << ": n=" << kll.get_n() << ", num_retained=" << kll.get_num_retained()
+                  << ", num_levels=" << static_cast<int>(kll.get_num_levels()) << std::endl;
+
+        std::map<uint8_t, std::vector<uint64_t>> items_by_level;
+        kll.for_each_summarized_item([&](uint64_t item, uint64_t weight) {
+            uint8_t level = 0;
+            uint64_t w = weight;
+            while (w > 1) {
+                w >>= 1;
+                ++level;
+            }
+            items_by_level[level].push_back(item);
+        });
+
+        for (const auto &[level, items] : items_by_level) {
+            std::cout << "    Level " << static_cast<int>(level) << " (weight=" << (1ULL << level) << "): ";
+            for (size_t i = 0; i < items.size(); ++i) {
+                std::cout << items[i];
+                if (i < items.size() - 1) std::cout << ", ";
+            }
+            std::cout << std::endl;
+        }
+    }
+
     void _initialize_seeds() {
         std::mt19937_64 rng(std::random_device{}());
         std::uniform_int_distribution<uint32_t> dist;

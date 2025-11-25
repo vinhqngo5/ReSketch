@@ -933,32 +933,92 @@ template <typename T, typename C, typename A> template <typename Func> void kll_
     }
 }
 
-template <typename T, typename C, typename A> void kll_sketch<T, C, A>::update_weighted(const T &item, uint64_t weight, bool compress) {
-    if (weight == 0) return;
+template <typename T, typename C, typename A>
+kll_sketch<T, C, A> kll_sketch<T, C, A>::construct_from_weighted_items(const std::vector<std::pair<T, uint64_t>> &weighted_items, uint16_t k, const C &comparator,
+                                                                       const A &allocator) {
+    kll_sketch<T, C, A> sketch(k, comparator, allocator);
 
-    if (compress) {
-        for (uint64_t i = 0; i < weight; ++i) { update(item); }
-    } else {
-        for (uint64_t i = 0; i < weight; ++i) { update(item); }
+    if (weighted_items.empty()) return sketch;
+
+    // Calculate total n and find min/max
+    uint64_t total_n = 0;
+    for (const auto &[item, weight] : weighted_items) {
+        total_n += weight;
+        if (!sketch.min_item_.has_value() || comparator(item, *sketch.min_item_)) { sketch.min_item_ = item; }
+        if (!sketch.max_item_.has_value() || comparator(*sketch.max_item_, item)) { sketch.max_item_ = item; }
+    }
+    sketch.n_ = total_n;
+
+    // Group items by level based on their weights -> Items with weight 2^i go to level i
+    std::map<uint8_t, std::vector<T, A>> items_by_level;
+    uint32_t total_items = 0;
+    for (const auto &[item, weight] : weighted_items) {
+        uint64_t remaining_weight = weight;
+        uint8_t level = 0;
+        while (remaining_weight > 0) {
+            if (remaining_weight & 1) {
+                if (items_by_level.find(level) == items_by_level.end()) { items_by_level[level] = std::vector<T, A>(allocator); }
+                items_by_level[level].push_back(item);
+                ++total_items;
+            }
+            remaining_weight >>= 1;
+            level++;
+        }
     }
 
-    // TODO: implement weighted update without compression
-    // else {
-    //     n_ += weight;
-    //     uint8_t level = 0;
-    //     uint64_t remaining_weight = weight;
+    // Determine the number of levels
+    const uint8_t num_levels_from_data = items_by_level.empty() ? 1 : (items_by_level.rbegin()->first + 1);
+    const uint8_t ub = kll_helper::ub_on_num_levels(total_n);
+    const size_t work_levels_size = std::max(static_cast<size_t>(ub + 2), static_cast<size_t>(num_levels_from_data + 2));
 
-    //     while (remaining_weight > 0) {
-    //         if (remaining_weight & 1) {
-    //             const uint32_t index = --levels_[level];
-    //             new (&items_[index]) T(item);
-    //             update_min_max(item);
-    //             if (level == 0) { is_level_zero_sorted_ = false; }
-    //         }
-    //         remaining_weight >>= 1;
-    //         level++;
-    //     }
-    // }
+    // Allocate workbuf and worklevels (the same as merge_higher_levels)
+    A alloc(allocator);
+    auto workbuf_deleter = [total_items, &alloc](T *ptr) { alloc.deallocate(ptr, total_items); };
+    const std::unique_ptr<T, decltype(workbuf_deleter)> workbuf(alloc.allocate(total_items), workbuf_deleter);
+    vector_u32 worklevels(work_levels_size, 0, allocator);
+    vector_u32 outlevels(work_levels_size, 0, allocator);
+
+    // Populate workbuf and worklevels (similar pattern to populate_work_arrays)
+    worklevels[0] = 0;
+    for (uint8_t lvl = 0; lvl < num_levels_from_data; ++lvl) {
+        const uint32_t start_pos = worklevels[lvl];
+        uint32_t pos = start_pos;
+
+        auto it = items_by_level.find(lvl);
+        if (it != items_by_level.end()) {
+            // Sort items at this level
+            std::sort(it->second.begin(), it->second.end(), comparator);
+            // Copy to workbuf
+            for (const auto &item : it->second) {
+                new (&workbuf.get()[pos]) T(item);
+                ++pos;
+            }
+        }
+        worklevels[lvl + 1] = pos;
+    }
+
+    // Use general_compress to properly distribute across levels and compact if needed
+    const kll_helper::compress_result result =
+        kll_helper::general_compress<T, C>(k, kll_constants::DEFAULT_M, num_levels_from_data, workbuf.get(), worklevels.data(), outlevels.data(), true);
+
+    // Transfer results to sketch (similar to merge_higher_levels)
+    if (sketch.items_ != nullptr) { alloc.deallocate(sketch.items_, sketch.items_size_); }
+    sketch.items_size_ = result.final_capacity;
+    sketch.items_ = alloc.allocate(sketch.items_size_);
+
+    const uint32_t free_space_at_bottom = result.final_capacity - result.final_num_items;
+    kll_helper::move_construct<T>(workbuf.get(), outlevels[0], outlevels[0] + result.final_num_items, sketch.items_, free_space_at_bottom, true);
+
+    // Set up levels
+    const size_t new_levels_size = result.final_num_levels + 1;
+    sketch.levels_.resize(new_levels_size);
+    const uint32_t offset = free_space_at_bottom - outlevels[0];
+    for (uint8_t lvl = 0; lvl < new_levels_size; ++lvl) { sketch.levels_[lvl] = outlevels[lvl] + offset; }
+    sketch.num_levels_ = result.final_num_levels;
+    sketch.is_level_zero_sorted_ = false;
+    sketch.min_k_ = k;
+
+    return sketch;
 }
 
 } /* namespace datasketches */

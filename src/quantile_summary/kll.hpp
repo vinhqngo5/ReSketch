@@ -125,8 +125,21 @@ class KLLXX : public QuantileSummary, public FrequencySummary {
         }
     }
 
+    // Construct KLL from weighted items without compression
+    static KLLXX construct_from_weighted_items(const std::vector<std::pair<uint64_t, uint64_t>> &weighted_items, const KLLConfig &config) {
+        KLLXX sketch(config);
+
+        for (size_t i = 0; i < weighted_items.size(); ++i) {
+            bool is_last = (i == weighted_items.size() - 1);
+            sketch.update(weighted_items[i].first, weighted_items[i].second, is_last);   // compress only on last item
+            // sketch.update(weighted_items[i].first, weighted_items[i].second, false);
+        }
+
+        return sketch;
+    }
+
     // Update the sketch with a new item and its weight -> Need to double check the correctness later but it should be correct
-    // compress = False is used in Split() to avoid repeated compressions
+    // compress = False is used in Resketch::Split() to avoid repeated compressions
     void update(uint64_t item, uint64_t weight, bool compress = true) {
         if (weight == 0) return;
 

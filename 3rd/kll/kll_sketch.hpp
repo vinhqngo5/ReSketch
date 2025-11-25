@@ -510,7 +510,9 @@ class kll_sketch {
     double get_count_in_range(const T &start_item, const T &end_item) const;
     kll_sketch rebuild(const T &start_item, const T &end_item) const;
     template <typename Func> void for_each_summarized_item(Func func) const;
-    void update_weighted(const T &item, uint64_t weight, bool compress = true);
+
+    // Construct KLL from weighted items without intermediate compaction. Items will be sorted and distributed across levels to match weights
+    static kll_sketch construct_from_weighted_items(const std::vector<std::pair<T, uint64_t>> &weighted_items, uint16_t k, const C &comparator = C(), const A &allocator = A());
 
   private:
     /* Serialized sketch layout:

@@ -65,7 +65,12 @@ class KLL : public QuantileSummary, public FrequencySummary {
 
     void for_each_summarized_item(const std::function<void(uint64_t item, uint64_t weight)> &func) const { m_sketch.for_each_summarized_item(func); }
 
-    void update(uint64_t item, uint64_t weight, bool compress = true) { m_sketch.update_weighted(item, weight, compress); }
+    // Construct KLL from weighted items without intermediate compaction
+    static KLL construct_from_weighted_items(const std::vector<std::pair<uint64_t, uint64_t>> &weighted_items, const KLLConfig &config) {
+        KLL result(config);
+        result.m_sketch = datasketches::kll_sketch<uint64_t>::construct_from_weighted_items(weighted_items, static_cast<uint16_t>(config.k));
+        return result;
+    }
 
     // NOTE: actually apache datasketches KLL does not provide a way to set c explicitly
     uint32_t get_max_memory_usage() const {
@@ -93,6 +98,8 @@ class KLL : public QuantileSummary, public FrequencySummary {
     bool is_empty() const { return m_sketch.is_empty(); }
     uint64_t get_n() const { return m_sketch.get_n(); }
     uint32_t get_k() const { return m_sketch.get_k(); }
+    uint32_t get_num_retained() const { return m_sketch.get_num_retained(); }
+    uint8_t get_num_levels() const { return m_sketch.get_num_levels(); }
 
     friend std::ostream &operator<<(std::ostream &os, const KLL &kll) {
         os << "KLL Sketch (Apache DataSketches):" << std::endl;
