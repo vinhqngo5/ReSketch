@@ -43,6 +43,13 @@ class ReSketchV2 : public FrequencySummary {
         m_partition_ranges = {{0, std::numeric_limits<uint64_t>::max()}};
     }
 
+    ReSketchV2(uint32_t depth, uint32_t width, const std::vector<uint32_t> &seeds, uint32_t kll_k, uint32_t partition_seed, const std::vector<Ring> &rings)
+        : m_width(width), m_depth(depth), m_seeds(seeds), m_partition_seed(partition_seed), m_kll_config({kll_k}), m_rings(rings) {
+        m_config = {m_width, m_depth, kll_k};
+        _initialize_buckets();
+        m_partition_ranges = {{0, std::numeric_limits<uint64_t>::max()}};
+    }
+
     void update(uint64_t item) override {
         for (uint32_t i = 0; i < m_depth; ++i) {
             uint64_t h = _placement_hash(item, m_seeds[i]);
@@ -130,6 +137,39 @@ class ReSketchV2 : public FrequencySummary {
     }
 
     static ReSketchV2 merge(const ReSketchV2 &s1, const ReSketchV2 &s2) {
+        if (s1.m_depth != s2.m_depth || s1.m_kll_config.k != s2.m_kll_config.k) { throw std::invalid_argument("Sketches must have same depth and kll_k to merge."); }
+
+        if (s1.m_seeds != s2.m_seeds) { throw std::invalid_argument("Sketches must have the same seeds to merge."); }
+
+        uint32_t new_width = s1.m_width + s2.m_width;
+
+        // Merge rings: combine both rings and sort, reassigning bucket IDs
+        std::vector<Ring> merged_rings(s1.m_depth);
+        for (uint32_t i = 0; i < s1.m_depth; ++i) { merged_rings[i] = _merge_rings(s1.m_rings[i], s2.m_rings[i]); }
+
+        ReSketchV2 merged_sketch(s1.m_depth, new_width, s1.m_seeds, s1.m_kll_config.k, s1.m_partition_seed, merged_rings);
+
+        for (uint32_t i = 0; i < s1.m_depth; ++i) {
+            auto temp_buckets_1 = _remap_row(s1.m_rings[i], s1.m_buckets[i], merged_sketch.m_rings[i]);
+            auto temp_buckets_2 = _remap_row(s2.m_rings[i], s2.m_buckets[i], merged_sketch.m_rings[i]);
+
+            for (uint32_t j = 0; j < new_width; ++j) {
+                merged_sketch.m_buckets[i][j].count = temp_buckets_1[j].count + temp_buckets_2[j].count;
+                merged_sketch.m_buckets[i][j].q_sketch = std::move(temp_buckets_1[j].q_sketch);
+                merged_sketch.m_buckets[i][j].q_sketch.merge(temp_buckets_2[j].q_sketch);
+            }
+        }
+
+        // Merge partition ranges
+        merged_sketch.m_partition_ranges = s1.m_partition_ranges;
+        merged_sketch.m_partition_ranges.insert(merged_sketch.m_partition_ranges.end(), s2.m_partition_ranges.begin(), s2.m_partition_ranges.end());
+        _merge_and_sort_ranges(merged_sketch.m_partition_ranges);
+
+        return merged_sketch;
+    }
+
+    // Original merge function that creates new random rings
+    static ReSketchV2 merge_with_new_rings(const ReSketchV2 &s1, const ReSketchV2 &s2) {
         if (s1.m_depth != s2.m_depth || s1.m_kll_config.k != s2.m_kll_config.k) { throw std::invalid_argument("Sketches must have same depth and kll_k to merge."); }
 
         if (s1.m_seeds != s2.m_seeds) { throw std::invalid_argument("Sketches must have the same seeds to merge."); }
@@ -367,6 +407,21 @@ class ReSketchV2 : public FrequencySummary {
             prev_p = current_p;
         }
         return out_buckets;
+    }
+
+    // Helper to merge two rings
+    static Ring _merge_rings(const Ring &ring1, const Ring &ring2) {
+        Ring merged_ring;
+        merged_ring.reserve(ring1.size() + ring2.size());
+
+        for (const auto &point : ring1) { merged_ring.push_back({point.first, 0}); }
+        for (const auto &point : ring2) { merged_ring.push_back({point.first, 0}); }
+
+        std::sort(merged_ring.begin(), merged_ring.end());
+
+        for (uint32_t i = 0; i < merged_ring.size(); ++i) { merged_ring[i].second = i; }
+
+        return merged_ring;
     }
 
     // Helper to merge and sort partition ranges, combining overlapping/adjacent ranges
