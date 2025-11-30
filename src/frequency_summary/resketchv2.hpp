@@ -69,7 +69,7 @@ class ReSketchV2 : public FrequencySummary {
         return total_kll_est / static_cast<double>(m_depth);
     }
 
-    // --- Dynamic Operations ---
+    // --- Structure-defining Operations ---
 
     void expand(uint32_t new_width) {
         if (new_width <= m_width) throw std::invalid_argument("New width must be larger than current width.");
