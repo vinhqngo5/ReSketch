@@ -60,13 +60,19 @@ class ReSketchV2 : public FrequencySummary {
     }
 
     double estimate(uint64_t item) const override {
-        double total_kll_est = 0.0;
+        std::vector<double> estimates;
+        estimates.reserve(m_depth);
         for (uint32_t i = 0; i < m_depth; ++i) {
             uint64_t h = _placement_hash(item, m_seeds[i]);
             uint32_t id = _find_bucket_id(h, m_rings[i]);
-            total_kll_est += m_buckets[i][id].q_sketch.estimate(h);
+            estimates.push_back(m_buckets[i][id].q_sketch.estimate(h));
         }
-        return total_kll_est / static_cast<double>(m_depth);
+        std::sort(estimates.begin(), estimates.end());
+        if (m_depth % 2 == 0) {
+            return (estimates[m_depth / 2 - 1] + estimates[m_depth / 2]) / 2.0;
+        } else {
+            return estimates[m_depth / 2];
+        }
     }
 
     // --- Structure-defining Operations ---

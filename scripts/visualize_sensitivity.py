@@ -19,6 +19,8 @@ def aggregate_results(results_dict):
         query_throughput_list = []
         are_list = []
         aae_list = []
+        are_within_var_list = []
+        aae_within_var_list = []
         memory_list = []
         k_value = None
         depth = None
@@ -31,6 +33,10 @@ def aggregate_results(results_dict):
                 query_throughput_list.append(result['query_throughput_mops'])
                 are_list.append(result['are'])
                 aae_list.append(result['aae'])
+                if 'are_within_var' in result:
+                    are_within_var_list.append(result.get('are_within_var', 0.0))
+                if 'aae_within_var' in result:
+                    aae_within_var_list.append(result.get('aae_within_var', 0.0))
                 memory_list.append(result['memory_bytes'] / 1024)
                 if result['algorithm'] == 'ReSketch':
                     k_value = result['k_value']
@@ -47,13 +53,17 @@ def aggregate_results(results_dict):
             'are_std': np.std(are_list),
             'aae_mean': np.mean(aae_list),
             'aae_std': np.std(aae_list),
+            'are_within_var_mean': (np.mean(are_within_var_list) if len(are_within_var_list) > 0 else 0.0),
+            'are_within_var_std': (np.std(are_within_var_list) if len(are_within_var_list) > 0 else 0.0),
+            'aae_within_var_mean': (np.mean(aae_within_var_list) if len(aae_within_var_list) > 0 else 0.0),
+            'aae_within_var_std': (np.std(aae_within_var_list) if len(aae_within_var_list) > 0 else 0.0),
             'memory_mean': np.mean(memory_list),
             'memory_std': np.std(memory_list),
         }
     
     return aggregated
 
-def plot_results(config, aggregated, output_path):
+def plot_results(config, aggregated, output_path, show_within_variance=False):
     material_colors = load_material_colors("scripts/colors/material-colors.json")
     
     font_config = setup_fonts(__file__)
@@ -61,7 +71,11 @@ def plot_results(config, aggregated, output_path):
     cm_style = get_countmin_style(material_colors)
     depth_styles = get_resketch_depth_styles(material_colors)
     
-    fig, axes = plt.subplots(1, 4, figsize=(16, 3))
+    # If requested, add two more plots for within-run variance of ARE and AAE
+    if show_within_variance:
+        fig, axes = plt.subplots(1, 6, figsize=(24, 3))
+    else:
+        fig, axes = plt.subplots(1, 4, figsize=(16, 3))
     
     cm_data = aggregated.get('CountMin', None)
     
@@ -76,6 +90,9 @@ def plot_results(config, aggregated, output_path):
                 depth_data[depth][k] = data
     
     depths = sorted(depth_data.keys())
+    # depths = [1, 3, 5, 7] 
+    depths = [ 3, 4, 5, 6, 7, 8] 
+    cm_data = None
     k_values = sorted(list(depth_data[depths[0]].keys())) if depths else []
     
     print(f"Found depths: {depths}")
@@ -86,10 +103,9 @@ def plot_results(config, aggregated, output_path):
         plot_horizontal_baseline(ax_throughput, k_values,
                                 cm_data['throughput_mean'],
                                 cm_data['throughput_std'],
-                                cm_style)
-    
+                                cm_style)    
     for depth in depths:
-        style = depth_styles.get(depth, depth_styles[4])
+        style = depth_styles.get(depth, depth_styles[3])
         data_dict = depth_data[depth]
         
         throughput_mean = np.array([data_dict[k]['throughput_mean'] for k in k_values])
@@ -100,7 +116,7 @@ def plot_results(config, aggregated, output_path):
     style_axis(ax_throughput, font_config, 
               ylabel='Update Throughput (Mops/s)', 
               xlabel='k value',
-              title='Sensitivity Analysis')
+              title='Sensitivity Analysis (error bars = var across runs)')
     
     ax_query = axes[1]
     if cm_data:
@@ -110,7 +126,7 @@ def plot_results(config, aggregated, output_path):
                                 cm_style)
     
     for depth in depths:
-        style = depth_styles.get(depth, depth_styles[4])
+        style = depth_styles.get(depth, depth_styles[3])
         data_dict = depth_data[depth]
         
         query_mean = np.array([data_dict[k]['query_throughput_mean'] for k in k_values])
@@ -130,7 +146,7 @@ def plot_results(config, aggregated, output_path):
                                 cm_style)
     
     for depth in depths:
-        style = depth_styles.get(depth, depth_styles[4])
+        style = depth_styles.get(depth, depth_styles[3])
         data_dict = depth_data[depth]
         
         are_mean = np.array([data_dict[k]['are_mean'] for k in k_values])
@@ -151,7 +167,7 @@ def plot_results(config, aggregated, output_path):
                                 cm_style)
     
     for depth in depths:
-        style = depth_styles.get(depth, depth_styles[4])
+        style = depth_styles.get(depth, depth_styles[3])
         data_dict = depth_data[depth]
         
         aae_mean = np.array([data_dict[k]['aae_mean'] for k in k_values])
@@ -163,6 +179,44 @@ def plot_results(config, aggregated, output_path):
               ylabel='AAE', 
               xlabel='k value',
               use_log_scale=False)
+
+    if show_within_variance:
+        ax_are_var = axes[4]
+        if cm_data:
+            plot_horizontal_baseline(ax_are_var, k_values,
+                                    cm_data.get('are_within_var_mean', 0.0),
+                                    cm_data.get('are_within_var_std', 0.0),
+                                    cm_style)
+
+        for depth in depths:
+            style = depth_styles.get(depth, depth_styles[3])
+            data_dict = depth_data[depth]
+            are_var_mean = np.array([data_dict[k]['are_within_var_mean'] for k in k_values])
+            are_var_std = np.array([data_dict[k]['are_within_var_std'] for k in k_values])
+            plot_line_with_error(ax_are_var, k_values, are_var_mean, are_var_std, style)
+
+        style_axis(ax_are_var, font_config,
+                  ylabel='ARE within-run var (avg)',
+                  xlabel='k value',
+                  title='Within-run variance (error bars = var across runs)')
+
+        ax_aae_var = axes[5]
+        if cm_data:
+            plot_horizontal_baseline(ax_aae_var, k_values,
+                                    cm_data.get('aae_within_var_mean', 0.0),
+                                    cm_data.get('aae_within_var_std', 0.0),
+                                    cm_style)
+
+        for depth in depths:
+            style = depth_styles.get(depth, depth_styles[3])
+            data_dict = depth_data[depth]
+            aae_var_mean = np.array([data_dict[k]['aae_within_var_mean'] for k in k_values])
+            aae_var_std = np.array([data_dict[k]['aae_within_var_std'] for k in k_values])
+            plot_line_with_error(ax_aae_var, k_values, aae_var_mean, aae_var_std, style)
+
+        style_axis(ax_aae_var, font_config,
+                  ylabel='AAE within-run var (avg)',
+                  xlabel='k value')
     
     create_shared_legend(fig, ax_throughput, ncol=4, font_config=font_config,
                         bbox_to_anchor=(0.5, 1.02), top_adjust=0.96)
@@ -178,10 +232,12 @@ def main():
                       help='Path to input JSON file with results')
     parser.add_argument('-o', '--output', type=str, default='output/sensitivity_results',
                       help='Base path for output files (without extension)')
+    parser.add_argument('--show-within-variance', action='store_true', help='Also visualize within-run variance (ARE/AAE)')
     
     args = parser.parse_args()
     
     print(f"Loading results from: {args.input}")
+    print("Showing within-run variance:", args.show_within_variance)
     data = load_results(args.input)
     
     config = data['config']
@@ -215,9 +271,86 @@ def main():
     
     print("\nAggregating results across repetitions...")
     aggregated = aggregate_results(results)
-    
+
+    def print_summary_table(aggregated):
+        names = list(aggregated.keys())
+        
+        thr = [(name, aggregated[name]['throughput_mean']) for name in names]
+        are = [(name, aggregated[name]['are_mean']) for name in names]
+        aae = [(name, aggregated[name]['aae_mean']) for name in names]
+        
+        has_within_var = any(aggregated[name]['are_within_var_mean'] > 0 for name in names)
+        
+        are_var = [(name, aggregated[name]['are_within_var_mean']) for name in names] if has_within_var else []
+        aae_var = [(name, aggregated[name]['aae_within_var_mean']) for name in names] if has_within_var else []
+
+        thr_sorted = sorted(thr, key=lambda x: x[1], reverse=True)
+        are_sorted = sorted(are, key=lambda x: x[1])
+        aae_sorted = sorted(aae, key=lambda x: x[1])
+
+        thr_best = thr_sorted[0][0] if thr_sorted else None
+        thr_second = thr_sorted[1][0] if len(thr_sorted) > 1 else None
+        are_best = are_sorted[0][0] if are_sorted else None
+        are_second = are_sorted[1][0] if len(are_sorted) > 1 else None
+        aae_best = aae_sorted[0][0] if aae_sorted else None
+        aae_second = aae_sorted[1][0] if len(aae_sorted) > 1 else None
+        
+        if has_within_var:
+            are_var_sorted = sorted(are_var, key=lambda x: x[1])
+            aae_var_sorted = sorted(aae_var, key=lambda x: x[1])
+            are_var_best = are_var_sorted[0][0] if are_var_sorted else None
+            are_var_second = are_var_sorted[1][0] if len(are_var_sorted) > 1 else None
+            aae_var_best = aae_var_sorted[0][0] if aae_var_sorted else None
+            aae_var_second = aae_var_sorted[1][0] if len(aae_var_sorted) > 1 else None
+
+        print('\nSummary Table:')
+        if has_within_var:
+            hdr = '{:30s} {:>12s} {:>12s} {:>12s} {:>12s} {:>14s} {:>14s}'.format(
+                'Config', 'Throughput', 'QueryThroughput', 'ARE', 'AAE', 'ARE_var', 'AAE_var')
+        else:
+            hdr = '{:30s} {:>12s} {:>12s} {:>12s} {:>10s}'.format('Config', 'Throughput', 'QueryThroughput', 'ARE', 'AAE')
+        print(hdr)
+        print('-' * len(hdr))
+        
+        for name in names:
+            row_thr = aggregated[name]['throughput_mean']
+            row_q = aggregated[name]['query_throughput_mean']
+            row_are = aggregated[name]['are_mean']
+            row_aae = aggregated[name]['aae_mean']
+
+            thr_mark = ''
+            are_mark = ''
+            aae_mark = ''
+            if name == thr_best: thr_mark = '*'
+            elif name == thr_second: thr_mark = '**'
+            if name == are_best: are_mark = '*'
+            elif name == are_second: are_mark = '**'
+            if name == aae_best: aae_mark = '*'
+            elif name == aae_second: aae_mark = '**'
+
+            if has_within_var:
+                row_are_var = aggregated[name]['are_within_var_mean']
+                row_aae_var = aggregated[name]['aae_within_var_mean']
+                are_var_mark = ''
+                aae_var_mark = ''
+                if name == are_var_best: are_var_mark = '*'
+                elif name == are_var_second: are_var_mark = '**'
+                if name == aae_var_best: aae_var_mark = '*'
+                elif name == aae_var_second: aae_var_mark = '**'
+                
+                print('{:30s} {:12.3f}{:<2s} {:12.3f} {:12.6f}{:<2s} {:12.6f}{:<2s} {:14.6f}{:<2s} {:14.6f}{:<2s}'.format(
+                    name, row_thr, thr_mark, row_q, row_are, are_mark, row_aae, aae_mark,
+                    row_are_var, are_var_mark, row_aae_var, aae_var_mark
+                ))
+            else:
+                print('{:30s} {:12.3f}{} {:12.3f} {:12.6f}{} {:10.6f}{}'.format(
+                    name, row_thr, thr_mark, row_q, row_are, are_mark, row_aae, aae_mark
+                ))
+
+    print_summary_table(aggregated)
+
     print("Generating plots...")
-    plot_results(config, aggregated, args.output)
+    plot_results(config, aggregated, args.output, show_within_variance=args.show_within_variance)
     
     print("\nDone!")
 

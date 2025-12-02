@@ -111,6 +111,7 @@ void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig 
     cout << "Generating data for resize scenario..." << endl;
     auto data = generate_zipf_data(conf.stream_size, conf.stream_diversity, conf.zipf_param);
     auto true_freqs = get_true_freqs(data);
+    cout << "Number of distinct items in stream: " << true_freqs.size() << " out of " << data.size() << " total items" << endl;
     auto top100 = get_top_k_items(true_freqs, 100);
     auto top1k = get_top_k_items(true_freqs, 1000);
     auto all_unique = get_top_k_items(true_freqs, true_freqs.size());
@@ -334,6 +335,7 @@ void scenario_frequency_comparison(const AppConfig &conf, CountMinConfig cm_conf
     cout << "\nGenerating data for frequency comparison..." << endl;
     auto data = generate_zipf_data(conf.stream_size, conf.stream_diversity, conf.zipf_param);
     auto true_freqs = get_true_freqs(data);
+    cout << "Number of distinct items in stream: " << true_freqs.size() << " out of " << data.size() << " total items" << endl;
     auto top50 = get_top_k_items(true_freqs, 50);
     auto random100 = get_random_items(true_freqs, 100);
 

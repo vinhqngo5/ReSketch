@@ -50,7 +50,7 @@ struct SensitivityConfig {
     // k values to test for ReSketch
     vector<uint32_t> k_values = {8, 10, 30, 50, 100};
     // depth values to test for ReSketch
-    vector<uint32_t> depth_values = {2, 4, 8};
+    vector<uint32_t> depth_values = {1, 2, 3, 4, 5, 6, 7, 8};
 
     static void add_params_to_config_parser(SensitivityConfig &config, ConfigParser &parser) {
         parser.AddParameter(new UnsignedInt32Parameter("app.memory_budget_kb", "32", &config.memory_budget_kb, false, "Memory budget in KB"));
@@ -104,6 +104,8 @@ struct SensitivityResult {
     double query_throughput_mops;
     double are;
     double aae;
+    double are_within_var;
+    double aae_within_var;
 };
 
 void export_to_json(const string &filename, const SensitivityConfig &config, const CountMinConfig &cm_config, const ReSketchConfig &rs_config,
@@ -152,7 +154,9 @@ void export_to_json(const string &filename, const SensitivityConfig &config, con
                                     {"throughput_mops", result.throughput_mops},
                                     {"query_throughput_mops", result.query_throughput_mops},
                                     {"are", result.are},
-                                    {"aae", result.aae}};
+                                    {"aae", result.aae},
+                                    {"are_within_var", result.are_within_var},
+                                    {"aae_within_var", result.aae_within_var}};
                 results_array.push_back(result_json);
             }
 
@@ -267,6 +271,35 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
             double are = calculate_are_all_items(cm_sketch, true_freqs);
             double aae = calculate_aae_all_items(cm_sketch, true_freqs);
 
+            // Compute within-run variance across items for relative and absolute errors
+            vector<double> are_errors;
+            vector<double> aae_errors;
+            are_errors.reserve(true_freqs.size());
+            aae_errors.reserve(true_freqs.size());
+            for (const auto &p : true_freqs) {
+                uint64_t item = p.first;
+                uint64_t true_freq = p.second;
+                double est_freq = cm_sketch.estimate(item);
+                double rel_error = (true_freq > 0) ? (std::abs(est_freq - (double) true_freq) / (double) true_freq) : 0.0;
+                are_errors.push_back(rel_error);
+                aae_errors.push_back(std::abs(est_freq - (double) true_freq));
+            }
+
+            double are_var_within = 0.0;
+            double aae_var_within = 0.0;
+            if (!are_errors.empty()) {
+                double mean_are = are;
+                double sum_sq = 0.0;
+                for (double v : are_errors) sum_sq += (v - mean_are) * (v - mean_are);
+                are_var_within = sum_sq / are_errors.size();
+            }
+            if (!aae_errors.empty()) {
+                double mean_aae = aae;
+                double sum_sq = 0.0;
+                for (double v : aae_errors) sum_sq += (v - mean_aae) * (v - mean_aae);
+                aae_var_within = sum_sq / aae_errors.size();
+            }
+
             SensitivityResult result;
             result.algorithm = "CountMin";
             result.k_value = 0;   // Not applicable
@@ -277,6 +310,8 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
             result.query_throughput_mops = query_throughput;
             result.are = are;
             result.aae = aae;
+            result.are_within_var = are_var_within;
+            result.aae_within_var = aae_var_within;
 
             all_results["CountMin"][rep].push_back(result);
 
@@ -316,6 +351,35 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
                 double are = calculate_are_all_items(rs_sketch, true_freqs);
                 double aae = calculate_aae_all_items(rs_sketch, true_freqs);
 
+                // Compute within-run variance across items for relative and absolute errors
+                vector<double> are_errors;
+                vector<double> aae_errors;
+                are_errors.reserve(true_freqs.size());
+                aae_errors.reserve(true_freqs.size());
+                for (const auto &p : true_freqs) {
+                    uint64_t item = p.first;
+                    uint64_t true_freq = p.second;
+                    double est_freq = rs_sketch.estimate(item);
+                    double rel_error = (true_freq > 0) ? (std::abs(est_freq - (double) true_freq) / (double) true_freq) : 0.0;
+                    are_errors.push_back(rel_error);
+                    aae_errors.push_back(std::abs(est_freq - (double) true_freq));
+                }
+
+                double are_var_within_rs = 0.0;
+                double aae_var_within_rs = 0.0;
+                if (!are_errors.empty()) {
+                    double mean_are = are;
+                    double sum_sq = 0.0;
+                    for (double v : are_errors) sum_sq += (v - mean_are) * (v - mean_are);
+                    are_var_within_rs = sum_sq / are_errors.size();
+                }
+                if (!aae_errors.empty()) {
+                    double mean_aae = aae;
+                    double sum_sq = 0.0;
+                    for (double v : aae_errors) sum_sq += (v - mean_aae) * (v - mean_aae);
+                    aae_var_within_rs = sum_sq / aae_errors.size();
+                }
+
                 SensitivityResult result;
                 result.algorithm = "ReSketch";
                 result.k_value = k;
@@ -326,6 +390,8 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
                 result.query_throughput_mops = query_throughput;
                 result.are = are;
                 result.aae = aae;
+                result.are_within_var = are_var_within_rs;
+                result.aae_within_var = aae_var_within_rs;
 
                 string config_name = "ReSketch_d" + to_string(depth) + "_k" + to_string(k);
                 all_results[config_name][rep].push_back(result);

@@ -90,22 +90,80 @@ def get_resketch_k_styles(material_colors):
     
     return styles
 
+# def get_resketch_depth_styles(material_colors):
+#     return {
+#         2: {
+#             'color': material_colors['purple']['300'],
+#             'marker': 'o',
+#             'linestyle': '-',
+#             'label': 'ReSketch (depth=2)'
+#         },
+#         4: {
+#             'color': material_colors['purple']['500'],
+#             'marker': 's',
+#             'linestyle': '-',
+#             'label': 'ReSketch (depth=4)'
+#         },
+#         6: {
+#             'color': material_colors['purple']['700'],
+#             'marker': 'D',  
+#             'linestyle': '-',
+#             'label': 'ReSketch (depth=6)'
+#         },
+#         8: {
+#             'color': material_colors['deeppurple']['500'],
+#             'marker': 'D',
+#             'linestyle': '-',
+#             'label': 'ReSketch (depth=8)'
+#         }
+#     }
+    
 def get_resketch_depth_styles(material_colors):
     return {
-        2: {
+        1: {
             'color': material_colors['purple']['300'],
+            'marker': 'o',
+            'linestyle': '-',
+            'label': 'ReSketch (depth=1)'
+        },
+        3: {
+            'color': material_colors['purple']['500'],
+            'marker': 's',
+            'linestyle': '-',
+            'label': 'ReSketch (depth=3)'
+        },
+        5: {
+            'color': material_colors['purple']['700'],
+            'marker': 'D',
+            'linestyle': '-',
+            'label': 'ReSketch (depth=5)'
+        },
+        7: {
+            'color': material_colors['deeppurple']['500'],
+            'marker': '^',
+            'linestyle': '-',
+            'label': 'ReSketch (depth=7)'
+        },
+        2: {
+            'color': material_colors['orange']['300'],
             'marker': 'o',
             'linestyle': '-',
             'label': 'ReSketch (depth=2)'
         },
         4: {
-            'color': material_colors['purple']['500'],
+            'color': material_colors['orange']['500'],
             'marker': 's',
             'linestyle': '-',
             'label': 'ReSketch (depth=4)'
         },
+        6: {
+            'color': material_colors['orange']['700'],
+            'marker': 'D',  
+            'linestyle': '-',
+            'label': 'ReSketch (depth=6)'
+        },
         8: {
-            'color': material_colors['purple']['700'],
+            'color': material_colors['red']['500'],
             'marker': 'D',
             'linestyle': '-',
             'label': 'ReSketch (depth=8)'
