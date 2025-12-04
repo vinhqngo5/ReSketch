@@ -38,6 +38,7 @@ class ReSketchV2 : public FrequencySummary {
     ReSketchV2(uint32_t depth, uint32_t width, const std::vector<uint32_t> &seeds, uint32_t kll_k, uint32_t partition_seed)
         : m_width(width), m_depth(depth), m_seeds(seeds), m_partition_seed(partition_seed), m_kll_config({kll_k}) {
         m_config = {m_width, m_depth, kll_k};
+        _initialize_pairwise_hash_family();
         _initialize_buckets();
         _initialize_rings();
         m_partition_ranges = {{0, std::numeric_limits<uint64_t>::max()}};
@@ -46,13 +47,14 @@ class ReSketchV2 : public FrequencySummary {
     ReSketchV2(uint32_t depth, uint32_t width, const std::vector<uint32_t> &seeds, uint32_t kll_k, uint32_t partition_seed, const std::vector<Ring> &rings)
         : m_width(width), m_depth(depth), m_seeds(seeds), m_partition_seed(partition_seed), m_kll_config({kll_k}), m_rings(rings) {
         m_config = {m_width, m_depth, kll_k};
+        _initialize_pairwise_hash_family();
         _initialize_buckets();
         m_partition_ranges = {{0, std::numeric_limits<uint64_t>::max()}};
     }
 
     void update(uint64_t item) override {
         for (uint32_t i = 0; i < m_depth; ++i) {
-            uint64_t h = _placement_hash(item, m_seeds[i]);
+            uint64_t h = _placement_hash(item, i);
             uint32_t id = _find_bucket_id(h, m_rings[i]);
             m_buckets[i][id].count++;
             m_buckets[i][id].q_sketch.update(h);
@@ -63,7 +65,7 @@ class ReSketchV2 : public FrequencySummary {
         std::vector<double> estimates;
         estimates.reserve(m_depth);
         for (uint32_t i = 0; i < m_depth; ++i) {
-            uint64_t h = _placement_hash(item, m_seeds[i]);
+            uint64_t h = _placement_hash(item, i);
             uint32_t id = _find_bucket_id(h, m_rings[i]);
             estimates.push_back(m_buckets[i][id].q_sketch.estimate(h));
         }
@@ -232,7 +234,7 @@ class ReSketchV2 : public FrequencySummary {
                 // Step 2: Extract and partition items based on partition hash
                 kll.for_each_summarized_item([&](uint64_t item, uint64_t weight) {
                     // Recover the partition hash from the placement hash
-                    uint64_t partition_hash = sketch._recover_partition_hash(item, sketch.m_seeds[row]);
+                    uint64_t partition_hash = sketch._recover_partition_hash(item, row);
 
                     // Determine which sketch this item belongs to based on split point
                     if (partition_hash < split_point) {
@@ -296,6 +298,22 @@ class ReSketchV2 : public FrequencySummary {
     const std::vector<std::pair<uint64_t, uint64_t>> &get_partition_ranges() const { return m_partition_ranges; }
 
   private:
+    // Compute modular multiplicative inverse using extended Euclidean algorithm
+    // For odd 'a', there exists a_inv such that a * a_inv ≡ 1 (mod 2^64)
+    static uint64_t _mod_inverse(uint64_t a) {
+        // Using the fact that for odd a: a * a_inv ≡ 1 (mod 2^64)
+        // We can use extended GCD or Newton's method
+        // Newton's method: x_{n+1} = x_n * (2 - a * x_n)
+        uint64_t x = a;        // Initial approximation
+        x = x * (2 - a * x);   // mod 2^2
+        x = x * (2 - a * x);   // mod 2^4
+        x = x * (2 - a * x);   // mod 2^8
+        x = x * (2 - a * x);   // mod 2^16
+        x = x * (2 - a * x);   // mod 2^32
+        x = x * (2 - a * x);   // mod 2^64
+        return x;
+    }
+
     // Helper function to print KLL details by level
     static void _print_kll_details(const std::string &label, uint32_t bucket_id, const KLL &kll) {
         std::cout << label << " Bucket " << bucket_id << ": n=" << kll.get_n() << ", num_retained=" << kll.get_num_retained()
@@ -324,10 +342,40 @@ class ReSketchV2 : public FrequencySummary {
 
     void _initialize_seeds() {
         std::mt19937_64 rng(std::random_device{}());
-        std::uniform_int_distribution<uint32_t> dist;
-        m_partition_seed = dist(rng);
+        std::uniform_int_distribution<uint32_t> seed_dist;
+        std::uniform_int_distribution<uint64_t> param_dist;
+
+        m_partition_seed = seed_dist(rng);
         m_seeds.reserve(m_depth);
-        for (uint32_t i = 0; i < m_depth; ++i) { m_seeds.push_back(dist(rng)); }
+        m_a.reserve(m_depth);
+        m_b.reserve(m_depth);
+        m_a_inv.reserve(m_depth);
+
+        for (uint32_t i = 0; i < m_depth; ++i) { m_seeds.push_back(seed_dist(rng)); }
+
+        std::mt19937_64 param_rng(m_partition_seed);
+        for (uint32_t i = 0; i < m_depth; ++i) {
+            param_rng.seed(m_seeds[i]);
+            uint64_t a = param_dist(param_rng) | 1;
+            m_a.push_back(a);
+            m_a_inv.push_back(_mod_inverse(a));
+            m_b.push_back(param_dist(param_rng));
+        }
+    }
+
+    void _initialize_pairwise_hash_family() {
+        std::mt19937_64 rng(m_partition_seed);
+        std::uniform_int_distribution<uint64_t> param_dist;
+        m_a.reserve(m_depth);
+        m_b.reserve(m_depth);
+        m_a_inv.reserve(m_depth);
+        for (uint32_t i = 0; i < m_depth; ++i) {
+            rng.seed(m_seeds[i]);
+            uint64_t a = param_dist(rng) | 1;
+            m_a.push_back(a);
+            m_a_inv.push_back(_mod_inverse(a));
+            m_b.push_back(param_dist(rng));
+        }
     }
 
     void _initialize_buckets() {
@@ -352,11 +400,17 @@ class ReSketchV2 : public FrequencySummary {
     // Step 1: Hash item to a partition space. This hash is consistent for a given item.
     uint64_t _partition_hash(uint64_t item) const { return XXHash64::hash(&item, sizeof(uint64_t), m_partition_seed); }
 
-    // Step 2: Create a reversible placement hash using the per-row seed.
-    uint64_t _placement_hash(uint64_t item, uint32_t seed) const { return _partition_hash(item) ^ static_cast<uint64_t>(seed); }
+    // Step 2: Create a reversible placement hash
+    uint64_t _placement_hash(uint64_t item, uint32_t row_index) const {
+        uint64_t partition_h = _partition_hash(item);
+        return m_a[row_index] * partition_h + m_b[row_index];
+    }
 
-    // Reverses Step 2 to recover the partition hash, needed for the Split operation.
-    uint64_t _recover_partition_hash(uint64_t placement_hash, uint32_t seed) const { return placement_hash ^ static_cast<uint64_t>(seed); }
+    // Reverses Step 2 to recover the partition hash using modular multiplicative inverse.
+    uint64_t _recover_partition_hash(uint64_t placement_hash, uint32_t row_index) const {
+        // placement_hash = a * partition_hash + b (mod 2^64) -> partition_hash = (placement_hash - b) * a_inv (mod 2^64)
+        return (placement_hash - m_b[row_index]) * m_a_inv[row_index];
+    }
 
     static uint32_t _find_bucket_id(uint64_t item_hash, const Ring &ring) {
         auto it = std::lower_bound(ring.begin(), ring.end(), std::make_pair(item_hash, std::numeric_limits<uint32_t>::max()));
@@ -463,6 +517,9 @@ class ReSketchV2 : public FrequencySummary {
     uint32_t m_partition_seed;   // Seed for the first hashing step (partition hash)
     KLLConfig m_kll_config;
     std::vector<std::pair<uint64_t, uint64_t>> m_partition_ranges;   // Ranges this sketch is responsible for [(start, end), ...]
+    std::vector<uint64_t> m_a;
+    std::vector<uint64_t> m_b;
+    std::vector<uint64_t> m_a_inv;   // Pre-calculated modular inverses of 'a' for each row to speed-up the reversible placement hash
 
     std::vector<Ring> m_rings;
     std::vector<std::vector<Bucket>> m_buckets;
