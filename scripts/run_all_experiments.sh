@@ -17,7 +17,7 @@ run_and_viz() {
     
     echo ""
     echo "Running ${exp_name}..."
-    build/release/bin/release/$exp_name $extra_args --app.repetitions 2 > "$OUTPUT_DIR/${exp_name}.txt" 2>&1
+    build/release/bin/release/$exp_name $extra_args --app.repetitions 5 > "$OUTPUT_DIR/${exp_name}.txt" 2>&1
     
     # Find the most recent JSON file for this experiment
     local json_file=$(ls -t output/${viz_name}_results_*.json 2>/dev/null | head -1)

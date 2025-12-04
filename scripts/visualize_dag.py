@@ -405,10 +405,10 @@ def main():
     parser = argparse.ArgumentParser(
         description='Visualize ReSketch DAG experimental results'
     )
-    parser.add_argument('result_file', type=str, 
+    parser.add_argument('-i', '--input', type=str, required=True,
                        help='Path to JSON result file')
-    parser.add_argument('-o', '--output', default="output/dag_results.png", type=str, 
-                       help='Output image path (default: <result_name>_visualization.png)')
+    parser.add_argument('-o', '--output', default="output/dag_results", type=str, 
+                       help='Output image path (default: output/dag_results)')
     parser.add_argument('-r', '--repetition', type=int, default=0,
                        help='Repetition ID to visualize (default: 0)')
     parser.add_argument('--no-structural-ops', action='store_true',
@@ -417,7 +417,7 @@ def main():
     args = parser.parse_args()
     
  
-    data = load_results(args.result_file)
+    data = load_results(args.input)
     config = data.get('config', {})
     results = data.get('results', [])
     metadata = data.get('metadata', {})
