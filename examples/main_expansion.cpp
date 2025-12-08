@@ -48,7 +48,7 @@ struct ExpansionConfig {
     uint64_t total_items = 10000000;   // Total items to process (may repeat dataset) -> time repeat = total_items / stream_size
     uint64_t stream_size = 10000000;
     uint64_t stream_diversity = 10000;
-    double zipf_param = 1.1;
+    float zipf_param = 1.1;
     string output_file = "output/expansion_results.json";
 
     static void add_params_to_config_parser(ExpansionConfig &config, ConfigParser &parser) {
@@ -61,7 +61,7 @@ struct ExpansionConfig {
         parser.AddParameter(new UnsignedInt64Parameter("app.total_items", "10000000", &config.total_items, false, "Total items to process (will repeat dataset if needed)"));
         parser.AddParameter(new UnsignedInt64Parameter("app.stream_size", "10000000", &config.stream_size, false, "Dataset size for zipf generation"));
         parser.AddParameter(new UnsignedInt64Parameter("app.stream_diversity", "1000000", &config.stream_diversity, false, "Unique items in stream (zipf)"));
-        parser.AddParameter(new FloatParameter("app.zipf", "1.1", reinterpret_cast<float *>(&config.zipf_param), false, "Zipfian param 'a'"));
+        parser.AddParameter(new FloatParameter("app.zipf", "1.1", &config.zipf_param, false, "Zipfian param 'a'"));
         parser.AddParameter(new StringParameter("app.output_file", "output/expansion_results.json", &config.output_file, false, "Output JSON file path"));
     }
 

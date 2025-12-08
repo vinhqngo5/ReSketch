@@ -42,7 +42,7 @@ struct MergeConfig {
     string caida_path = "data/CAIDA/only_ip";
     uint64_t stream_size = 10000000;
     uint64_t stream_diversity = 1000000;
-    double zipf_param = 1.1;
+    float zipf_param = 1.1;
     string output_file = "output/merge_results.json";
 
     static void add_params_to_config_parser(MergeConfig &config, ConfigParser &parser) {
@@ -52,7 +52,7 @@ struct MergeConfig {
         parser.AddParameter(new StringParameter("app.caida_path", "data/CAIDA/only_ip", &config.caida_path, false, "Path to CAIDA data file"));
         parser.AddParameter(new UnsignedInt64Parameter("app.stream_size", "10000000", &config.stream_size, false, "Total stream size (will be split 50-50)"));
         parser.AddParameter(new UnsignedInt64Parameter("app.stream_diversity", "1000000", &config.stream_diversity, false, "Unique items in stream"));
-        parser.AddParameter(new FloatParameter("app.zipf", "1.1", reinterpret_cast<float *>(&config.zipf_param), false, "Zipfian param 'a'"));
+        parser.AddParameter(new FloatParameter("app.zipf", "1.1", &config.zipf_param, false, "Zipfian param 'a'"));
         parser.AddParameter(new StringParameter("app.output_file", "output/merge_results.json", &config.output_file, false, "Output JSON file path"));
     }
 

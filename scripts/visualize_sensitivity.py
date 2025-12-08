@@ -91,7 +91,8 @@ def plot_results(config, aggregated, output_path, show_within_variance=False):
     
     depths = sorted(depth_data.keys())
     # depths = [1, 3, 5, 7] 
-    depths = [1, 2, 3, 4, 5, 6, 7, 8] 
+    # depths = [1, 2, 3, 4, 5, 6, 7, 8] 
+    depths = [3, 4, 5, 6, 7, 8] 
     cm_data = None
     k_values = sorted(list(depth_data[depths[0]].keys())) if depths else []
     

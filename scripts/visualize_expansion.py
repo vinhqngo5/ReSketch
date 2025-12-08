@@ -178,7 +178,7 @@ def main():
     parser.add_argument(
         '--plot-every',
         type=int,
-        default=1,
+        default=4,
         help='Plot 1 point for every N points (default: 1, plot all points). Use higher values (e.g., 5) to reduce clutter.'
     )
     

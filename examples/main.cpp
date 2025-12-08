@@ -36,12 +36,12 @@ using namespace std;
 struct AppConfig {
     uint64_t stream_size = 1000000;
     uint64_t stream_diversity = 10000;
-    double zipf_param = 1.1;
+    float zipf_param = 1.1;
 
     static void add_params_to_config_parser(AppConfig &config, ConfigParser &parser) {
         parser.AddParameter(new UnsignedInt64Parameter("app.stream_size", "1000000", &config.stream_size, false, "Total items in stream"));
         parser.AddParameter(new UnsignedInt64Parameter("app.stream_diversity", "10000", &config.stream_diversity, false, "Unique items in stream"));
-        parser.AddParameter(new FloatParameter("app.zipf", "1.1", reinterpret_cast<float *>(&config.zipf_param), false, "Zipfian param 'a'"));
+        parser.AddParameter(new FloatParameter("app.zipf", "1.1", &config.zipf_param, false, "Zipfian param 'a'"));
     }
     friend std::ostream &operator<<(std::ostream &os, const AppConfig &config) {
         ConfigPrinter<AppConfig>::print(os, config);

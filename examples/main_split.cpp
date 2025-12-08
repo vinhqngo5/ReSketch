@@ -42,7 +42,7 @@ struct SplitConfig {
     string caida_path = "data/CAIDA/only_ip";
     uint64_t stream_size = 10000000;
     uint64_t stream_diversity = 1000000;
-    double zipf_param = 1.1;
+    float zipf_param = 1.1;
     string output_file = "output/split_results.json";
 
     static void add_params_to_config_parser(SplitConfig &config, ConfigParser &parser) {
@@ -52,7 +52,7 @@ struct SplitConfig {
         parser.AddParameter(new StringParameter("app.caida_path", "data/CAIDA/only_ip", &config.caida_path, false, "Path to CAIDA dataset"));
         parser.AddParameter(new UnsignedInt64Parameter("app.stream_size", "10000000", &config.stream_size, false, "Stream size"));
         parser.AddParameter(new UnsignedInt64Parameter("app.stream_diversity", "1000000", &config.stream_diversity, false, "Stream diversity (number of unique items)"));
-        parser.AddParameter(new DoubleParameter("app.zipf_param", "1.1", &config.zipf_param, false, "Zipf parameter (skewness)"));
+        parser.AddParameter(new FloatParameter("app.zipf_param", "1.1", &config.zipf_param, false, "Zipf parameter (skewness)"));
         parser.AddParameter(new StringParameter("app.output_file", "output/split_results.json", &config.output_file, false, "Output JSON file"));
     }
 
