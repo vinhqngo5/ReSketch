@@ -148,7 +148,7 @@ void export_to_json(const string &filename, const ShrinkingConfig &config, const
                 checkpoints_array.push_back({{"items_processed", cp.items_processed},
                                              {"throughput_mops", cp.throughput_mops},
                                              {"query_throughput_mops", cp.query_throughput_mops},
-                                             {"memory_kb", cp.memory_kb},
+                                             {"memory_bytes", cp.memory_kb * 1024},
                                              {"are", cp.are},
                                              {"aae", cp.aae},
                                              {"is_warmup", cp.is_warmup},
@@ -184,6 +184,8 @@ void run_shrinking_experiment(const ShrinkingConfig &config, const ReSketchConfi
 
     map<string, vector<vector<Checkpoint>>> all_results;
     all_results["ReSketch"] = vector<vector<Checkpoint>>(config.repetitions);
+    all_results["StaticReSketch_Initial"] = vector<vector<Checkpoint>>(config.repetitions);
+    all_results["StaticReSketch_Max"] = vector<vector<Checkpoint>>(config.repetitions);
     all_results["GeometricSketch"] = vector<vector<Checkpoint>>(config.repetitions);
 
     for (uint32_t rep = 0; rep < config.repetitions; ++rep) {
@@ -226,6 +228,14 @@ void run_shrinking_experiment(const ShrinkingConfig &config, const ReSketchConfi
         ReSketchConfig rs_conf = rs_config;
         rs_conf.width = rs_initial_width;
         ReSketchV2 rs_sketch(rs_conf);
+
+        ReSketchConfig static_rs_initial_conf = rs_config;
+        static_rs_initial_conf.width = rs_initial_width;
+        ReSketchV2 static_rs_initial_sketch(static_rs_initial_conf);
+
+        ReSketchConfig static_rs_max_conf = rs_config;
+        static_rs_max_conf.width = calculate_width_from_memory_resketch(max_memory_bytes, rs_config.depth, rs_config.kll_k);
+        ReSketchV2 static_rs_max_sketch(static_rs_max_conf);
 
         GeometricSketchConfig gs_conf = gs_config;
         gs_conf.width = gs_initial_width;
@@ -276,6 +286,16 @@ void run_shrinking_experiment(const ShrinkingConfig &config, const ReSketchConfi
             for (uint64_t i = chunk_start; i < chunk_end; ++i) { rs_sketch.update(base_data[i % base_data.size()]); }
             double rs_duration = timer.stop_s();
 
+            // Process chunk for StaticReSketch (initial)
+            timer.start();
+            for (uint64_t i = chunk_start; i < chunk_end; ++i) { static_rs_initial_sketch.update(base_data[i % base_data.size()]); }
+            double static_rs_initial_duration = timer.stop_s();
+
+            // Process chunk for StaticReSketch (max)
+            timer.start();
+            for (uint64_t i = chunk_start; i < chunk_end; ++i) { static_rs_max_sketch.update(base_data[i % base_data.size()]); }
+            double static_rs_max_duration = timer.stop_s();
+
             // Process chunk for GeometricSketch
             timer.start();
             for (uint64_t i = chunk_start; i < chunk_end; ++i) { gs_sketch.update(base_data[i % base_data.size()]); }
@@ -288,25 +308,37 @@ void run_shrinking_experiment(const ShrinkingConfig &config, const ReSketchConfi
             for (uint64_t i = 0; i < items_processed; ++i) { true_freqs_at_checkpoint[base_data[i % base_data.size()]]++; }
 
             // Record checkpoint
-            Checkpoint rs_cp, gs_cp;
-            rs_cp.items_processed = gs_cp.items_processed = items_processed;
+            Checkpoint rs_cp, static_rs_initial_cp, static_rs_max_cp, gs_cp;
+            rs_cp.items_processed = static_rs_initial_cp.items_processed = static_rs_max_cp.items_processed = gs_cp.items_processed = items_processed;
 
             rs_cp.throughput_mops = (rs_duration > 0) ? (chunk_size / rs_duration / 1e6) : 0;
+            static_rs_initial_cp.throughput_mops = (static_rs_initial_duration > 0) ? (chunk_size / static_rs_initial_duration / 1e6) : 0;
+            static_rs_max_cp.throughput_mops = (static_rs_max_duration > 0) ? (chunk_size / static_rs_max_duration / 1e6) : 0;
             gs_cp.throughput_mops = (gs_duration > 0) ? (chunk_size / gs_duration / 1e6) : 0;
 
             rs_cp.memory_kb = rs_sketch.get_max_memory_usage() / 1024;
+            static_rs_initial_cp.memory_kb = static_rs_initial_sketch.get_max_memory_usage() / 1024;
+            static_rs_max_cp.memory_kb = static_rs_max_sketch.get_max_memory_usage() / 1024;
             gs_cp.memory_kb = gs_sketch.get_max_memory_usage() / 1024;
 
             rs_cp.are = calculate_are_all_items(rs_sketch, true_freqs_at_checkpoint);
+            static_rs_initial_cp.are = calculate_are_all_items(static_rs_initial_sketch, true_freqs_at_checkpoint);
+            static_rs_max_cp.are = calculate_are_all_items(static_rs_max_sketch, true_freqs_at_checkpoint);
             gs_cp.are = calculate_are_all_items(gs_sketch, true_freqs_at_checkpoint);
 
             rs_cp.aae = calculate_aae_all_items(rs_sketch, true_freqs_at_checkpoint);
+            static_rs_initial_cp.aae = calculate_aae_all_items(static_rs_initial_sketch, true_freqs_at_checkpoint);
+            static_rs_max_cp.aae = calculate_aae_all_items(static_rs_max_sketch, true_freqs_at_checkpoint);
             gs_cp.aae = calculate_aae_all_items(gs_sketch, true_freqs_at_checkpoint);
 
             rs_cp.is_warmup = false;
+            static_rs_initial_cp.is_warmup = false;
+            static_rs_max_cp.is_warmup = false;
             gs_cp.is_warmup = false;
 
             rs_cp.geometric_cannot_shrink = false;
+            static_rs_initial_cp.geometric_cannot_shrink = false;
+            static_rs_max_cp.geometric_cannot_shrink = false;
             gs_cp.geometric_cannot_shrink = gs_cannot_shrink;
 
             // Measure query throughput on all unique items
@@ -322,6 +354,20 @@ void run_shrinking_experiment(const ShrinkingConfig &config, const ReSketchConfi
             double rs_query_duration = timer.stop_s();
             rs_cp.query_throughput_mops = (rs_query_duration > 0) ? (num_queries / rs_query_duration / 1e6) : 0;
 
+            // StaticReSketch (initial) query throughput
+            volatile double static_rs_initial_sum = 0.0;
+            timer.start();
+            for (const auto &item : unique_items) { static_rs_initial_sum += static_rs_initial_sketch.estimate(item); }
+            double static_rs_initial_query_duration = timer.stop_s();
+            static_rs_initial_cp.query_throughput_mops = (static_rs_initial_query_duration > 0) ? (num_queries / static_rs_initial_query_duration / 1e6) : 0;
+
+            // StaticReSketch (max) query throughput
+            volatile double static_rs_max_sum = 0.0;
+            timer.start();
+            for (const auto &item : unique_items) { static_rs_max_sum += static_rs_max_sketch.estimate(item); }
+            double static_rs_max_query_duration = timer.stop_s();
+            static_rs_max_cp.query_throughput_mops = (static_rs_max_query_duration > 0) ? (num_queries / static_rs_max_query_duration / 1e6) : 0;
+
             // GeometricSketch query throughput
             volatile double gs_sum = 0.0;
             timer.start();
@@ -330,12 +376,17 @@ void run_shrinking_experiment(const ShrinkingConfig &config, const ReSketchConfi
             gs_cp.query_throughput_mops = (gs_query_duration > 0) ? (num_queries / gs_query_duration / 1e6) : 0;
 
             all_results["ReSketch"][rep].push_back(rs_cp);
+            all_results["StaticReSketch_Initial"][rep].push_back(static_rs_initial_cp);
+            all_results["StaticReSketch_Max"][rep].push_back(static_rs_max_cp);
             all_results["GeometricSketch"][rep].push_back(gs_cp);
 
             // Print checkpoint summary
             cout << "Checkpoint at " << items_processed << " items:" << endl;
-            cout << "  ReSketch:        Memory=" << rs_cp.memory_kb << " KB, ARE=" << rs_cp.are << ", AAE=" << rs_cp.aae << endl;
-            cout << "  GeometricSketch: Memory=" << gs_cp.memory_kb << " KB, ARE=" << gs_cp.are << ", AAE=" << gs_cp.aae;
+            cout << "  ReSketch:               Memory=" << rs_cp.memory_kb << " KB, ARE=" << rs_cp.are << ", AAE=" << rs_cp.aae << endl;
+            cout << "  StaticReSketch_Initial: Memory=" << static_rs_initial_cp.memory_kb << " KB, ARE=" << static_rs_initial_cp.are << ", AAE=" << static_rs_initial_cp.aae
+                 << endl;
+            cout << "  StaticReSketch_Max:     Memory=" << static_rs_max_cp.memory_kb << " KB, ARE=" << static_rs_max_cp.are << ", AAE=" << static_rs_max_cp.aae << endl;
+            cout << "  GeometricSketch:        Memory=" << gs_cp.memory_kb << " KB, ARE=" << gs_cp.are << ", AAE=" << gs_cp.aae;
             if (gs_cannot_shrink) { cout << " [Cannot shrink further]"; }
             cout << endl;
 

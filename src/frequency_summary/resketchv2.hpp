@@ -30,6 +30,7 @@ class ReSketchV2 : public FrequencySummary {
   public:
     explicit ReSketchV2(const ReSketchConfig &config) : m_config(config), m_width(config.width), m_depth(config.depth), m_kll_config({config.kll_k}) {
         _initialize_seeds();
+        _initialize_pairwise_hash_family();
         _initialize_buckets();
         _initialize_rings();
         m_partition_ranges = {{0, std::numeric_limits<uint64_t>::max()}};

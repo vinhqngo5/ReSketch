@@ -180,6 +180,7 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
     map<string, vector<vector<Checkpoint>>> all_results;
     all_results["CountMin"] = vector<vector<Checkpoint>>(config.repetitions);
     all_results["ReSketch"] = vector<vector<Checkpoint>>(config.repetitions);
+    all_results["StaticReSketch"] = vector<vector<Checkpoint>>(config.repetitions);
     all_results["DynamicSketch"] = vector<vector<Checkpoint>>(config.repetitions);
     all_results["GeometricSketch"] = vector<vector<Checkpoint>>(config.repetitions);
 
@@ -228,6 +229,10 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
         rs_conf.width = rs_width;
         ReSketchV2 rs_sketch(rs_conf);
 
+        ReSketchConfig static_rs_conf = rs_config;
+        static_rs_conf.width = rs_width;
+        ReSketchV2 static_rs_sketch(static_rs_conf);
+
         GeometricSketchConfig gs_conf = gs_config;
         gs_conf.width = gs_width;
         GeometricSketchWrapper gs_sketch(gs_conf);
@@ -259,6 +264,11 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
             for (uint64_t i = chunk_start; i < chunk_end; ++i) { rs_sketch.update(base_data[i % base_data.size()]); }
             double rs_duration = timer.stop_s();
 
+            // Process chunk for StaticReSketch
+            timer.start();
+            for (uint64_t i = chunk_start; i < chunk_end; ++i) { static_rs_sketch.update(base_data[i % base_data.size()]); }
+            double static_rs_duration = timer.stop_s();
+
             // Process chunk for GeometricSketch
             timer.start();
             for (uint64_t i = chunk_start; i < chunk_end; ++i) { gs_sketch.update(base_data[i % base_data.size()]); }
@@ -276,26 +286,30 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
             for (uint64_t i = 0; i < items_processed; ++i) { true_freqs_at_checkpoint[base_data[i % base_data.size()]]++; }
 
             // Record checkpoint
-            Checkpoint cm_cp, rs_cp, gs_cp, ds_cp;
-            cm_cp.items_processed = rs_cp.items_processed = gs_cp.items_processed = ds_cp.items_processed = items_processed;
+            Checkpoint cm_cp, rs_cp, static_rs_cp, gs_cp, ds_cp;
+            cm_cp.items_processed = rs_cp.items_processed = static_rs_cp.items_processed = gs_cp.items_processed = ds_cp.items_processed = items_processed;
 
             cm_cp.throughput_mops = (cm_duration > 0) ? (chunk_size / cm_duration / 1e6) : 0;
             rs_cp.throughput_mops = (rs_duration > 0) ? (chunk_size / rs_duration / 1e6) : 0;
+            static_rs_cp.throughput_mops = (static_rs_duration > 0) ? (chunk_size / static_rs_duration / 1e6) : 0;
             gs_cp.throughput_mops = (gs_duration > 0) ? (chunk_size / gs_duration / 1e6) : 0;
             ds_cp.throughput_mops = (ds_duration > 0) ? (chunk_size / ds_duration / 1e6) : 0;
 
             cm_cp.memory_kb = cm_sketch.get_max_memory_usage() / 1024;
             rs_cp.memory_kb = rs_sketch.get_max_memory_usage() / 1024;
+            static_rs_cp.memory_kb = static_rs_sketch.get_max_memory_usage() / 1024;
             gs_cp.memory_kb = gs_sketch.get_max_memory_usage() / 1024;
             ds_cp.memory_kb = ds_sketch.get_max_memory_usage() / 1024;
 
             cm_cp.are = calculate_are_all_items(cm_sketch, true_freqs_at_checkpoint);
             rs_cp.are = calculate_are_all_items(rs_sketch, true_freqs_at_checkpoint);
+            static_rs_cp.are = calculate_are_all_items(static_rs_sketch, true_freqs_at_checkpoint);
             gs_cp.are = calculate_are_all_items(gs_sketch, true_freqs_at_checkpoint);
             ds_cp.are = calculate_are_all_items(ds_sketch, true_freqs_at_checkpoint);
 
             cm_cp.aae = calculate_aae_all_items(cm_sketch, true_freqs_at_checkpoint);
             rs_cp.aae = calculate_aae_all_items(rs_sketch, true_freqs_at_checkpoint);
+            static_rs_cp.aae = calculate_aae_all_items(static_rs_sketch, true_freqs_at_checkpoint);
             gs_cp.aae = calculate_aae_all_items(gs_sketch, true_freqs_at_checkpoint);
             ds_cp.aae = calculate_aae_all_items(ds_sketch, true_freqs_at_checkpoint);
 
@@ -319,6 +333,13 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
             double rs_query_duration = timer.stop_s();
             rs_cp.query_throughput_mops = (rs_query_duration > 0) ? (num_queries / rs_query_duration / 1e6) : 0;
 
+            // StaticReSketch query throughput
+            volatile double static_rs_sum = 0.0;
+            timer.start();
+            for (const auto &item : unique_items) { static_rs_sum += static_rs_sketch.estimate(item); }
+            double static_rs_query_duration = timer.stop_s();
+            static_rs_cp.query_throughput_mops = (static_rs_query_duration > 0) ? (num_queries / static_rs_query_duration / 1e6) : 0;
+
             // GeometricSketch query throughput
             volatile double gs_sum = 0.0;
             timer.start();
@@ -335,6 +356,7 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
 
             all_results["CountMin"][rep].push_back(cm_cp);
             all_results["ReSketch"][rep].push_back(rs_cp);
+            all_results["StaticReSketch"][rep].push_back(static_rs_cp);
             all_results["GeometricSketch"][rep].push_back(gs_cp);
             all_results["DynamicSketch"][rep].push_back(ds_cp);
 
@@ -343,6 +365,8 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
                  << ", AAE=" << cm_cp.aae << endl;
             cout << "  RS: " << rs_cp.throughput_mops << " Mops, Query: " << rs_cp.query_throughput_mops << " Mops, " << rs_cp.memory_kb << " KB, ARE=" << rs_cp.are
                  << ", AAE=" << rs_cp.aae << endl;
+            cout << "  Static RS: " << static_rs_cp.throughput_mops << " Mops, Query: " << static_rs_cp.query_throughput_mops << " Mops, " << static_rs_cp.memory_kb
+                 << " KB, ARE=" << static_rs_cp.are << ", AAE=" << static_rs_cp.aae << endl;
             cout << "  GS: " << gs_cp.throughput_mops << " Mops, Query: " << gs_cp.query_throughput_mops << " Mops, " << gs_cp.memory_kb << " KB, ARE=" << gs_cp.are
                  << ", AAE=" << gs_cp.aae << endl;
             cout << "  DS: " << ds_cp.throughput_mops << " Mops, Query: " << ds_cp.query_throughput_mops << " Mops, " << ds_cp.memory_kb << " KB, ARE=" << ds_cp.are

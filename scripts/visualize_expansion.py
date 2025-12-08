@@ -27,7 +27,7 @@ def aggregate_results(results_dict):
             query_throughput = [cp['query_throughput_mops'] for cp in checkpoints]
             are = [cp['are'] for cp in checkpoints]
             aae = [cp['aae'] for cp in checkpoints]
-            memory = [cp.get('memory_bytes', cp.get('memory_kb', 0) * 1024) / 1024 for cp in checkpoints]
+            memory = [cp['memory_bytes'] / 1024 if 'memory_bytes' in cp else cp.get('memory_kb', 0) for cp in checkpoints]
             
             items_list.append(items)
             throughput_list.append(throughput)
@@ -152,7 +152,7 @@ def plot_results(config, aggregated, output_path, plot_every_n_points=1):
               xlabel='Items Processed (millions)',
               ylabel='Memory (KB)')
     
-    create_shared_legend(fig, ax_throughput, ncol=4, font_config=font_config,
+    create_shared_legend(fig, ax_throughput, ncol=5, font_config=font_config,
                         bbox_to_anchor=(0.5, 1.02), top_adjust=0.96)
     
     plt.tight_layout()

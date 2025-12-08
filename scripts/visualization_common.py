@@ -51,6 +51,24 @@ def get_sketch_styles(material_colors):
             'linestyle': '-', 
             'label': 'ReSketch'
         },
+        'StaticReSketch': {
+            'color': material_colors['purple']['200'], 
+            'marker': '^', 
+            'linestyle': '-.', 
+            'label': 'StaticReSketch'
+        },
+        'StaticReSketch_Initial': {
+            'color': material_colors['purple']['200'], 
+            'marker': '^', 
+            'linestyle': '-.', 
+            'label': 'StaticReSketch (Initial)'
+        },
+        'StaticReSketch_Max': {
+            'color': material_colors['purple']['700'], 
+            'marker': 'v', 
+            'linestyle': '--', 
+            'label': 'StaticReSketch (Max)'
+        },
         'DynamicSketch': {
             'color': material_colors['orange']['500'], 
             'marker': 's', 
