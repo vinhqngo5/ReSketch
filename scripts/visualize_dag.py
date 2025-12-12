@@ -18,7 +18,12 @@ def format_memory(kb):
         return f"{kb}KB"
 
 def aggregate_checkpoint_metrics(checkpoints, sketch_name):
-    sketch_checkpoints = [cp for cp in checkpoints if cp['sketch_name'] == sketch_name]
+    sketch_checkpoints = []
+    for cp_list in checkpoints:
+        if isinstance(cp_list, list):
+            for cp in cp_list:
+                if cp['sketch_name'] == sketch_name:
+                    sketch_checkpoints.append(cp)
     
     if not sketch_checkpoints:
         return None
@@ -27,6 +32,8 @@ def aggregate_checkpoint_metrics(checkpoints, sketch_name):
     query_throughput = np.mean([cp['query_throughput_mops'] for cp in sketch_checkpoints])
     are = np.mean([cp['are'] for cp in sketch_checkpoints])
     aae = np.mean([cp['aae'] for cp in sketch_checkpoints])
+    are_var = np.mean([cp.get('are_variance', 0.0) for cp in sketch_checkpoints])
+    aae_var = np.mean([cp.get('aae_variance', 0.0) for cp in sketch_checkpoints])
     memory_kb = sketch_checkpoints[-1]['memory_kb']
     
     return {
@@ -34,20 +41,26 @@ def aggregate_checkpoint_metrics(checkpoints, sketch_name):
         'query_throughput_mops': query_throughput,
         'are': are,
         'aae': aae,
+        'are_variance': are_var,
+        'aae_variance': aae_var,
         'memory_kb': memory_kb,
         'num_checkpoints': len(sketch_checkpoints)
     }
 
 def get_structural_op_metrics(structural_ops, sketch_name):
-    for op in structural_ops:
-        if op['sketch_name'] == sketch_name:
-            return {
-                'operation': op['operation'],
-                'latency_s': op['latency_s'],
-                'are': op['are'],
-                'aae': op['aae'],
-                'memory_kb': op['memory_kb']
-            }
+    for op_list in structural_ops:
+        if isinstance(op_list, list):
+            for op in op_list:
+                if op['sketch_name'] == sketch_name:
+                    return {
+                        'operation': op['operation'],
+                        'latency_s': op['latency_s'],
+                        'are': op['are'],
+                        'aae': op['aae'],
+                        'are_var': op.get('are_variance', 0.0),
+                        'aae_var': op.get('aae_variance', 0.0),
+                        'memory_kb': op['memory_kb']
+                    }
     return None
 
 def build_dag_structure(sketches):
@@ -156,7 +169,7 @@ def compute_layout(sketches, edges):
     return positions
 
 def plot_results(config, results, metadata, output_path, 
-                          repetition_id=0, show_structural_ops=True):
+                          repetition_id=0, show_structural_ops=True, show_within_variance=True):
     sketches = config['sketches']
     sketch_config = config['sketch_config']
     
@@ -313,10 +326,12 @@ def plot_results(config, results, metadata, output_path,
             throughput = checkpoint_metrics['throughput_mops']
             are = checkpoint_metrics['are']
             aae = checkpoint_metrics['aae']
+            are_var = checkpoint_metrics['are_variance']
+            aae_var = checkpoint_metrics['aae_variance']
             memory_kb = checkpoint_metrics['memory_kb']
             
             metrics_y_start = pos[1] + 0.15
-            line_spacing = 0.22
+            line_spacing = 0.20
             
             ax.text(pos[0], metrics_y_start, f"{throughput:.2f} MOps/s",
                     fontsize=font_config['tick_size'], ha='center', va='center', 
@@ -326,9 +341,22 @@ def plot_results(config, results, metadata, output_path,
                     fontsize=font_config['tick_size'], ha='center', va='center', 
                     zorder=3, fontfamily=font_config['family'])
             
-            ax.text(pos[0], metrics_y_start - 2*line_spacing, f"AAE: {aae:.1f}",
-                    fontsize=font_config['tick_size'], ha='center', va='center', 
-                    zorder=3, fontfamily=font_config['family'])
+            if show_within_variance:
+                ax.text(pos[0], metrics_y_start - 2*line_spacing, f"(var: {are_var:.3f})",
+                        fontsize=font_config['tick_size']-1, ha='center', va='center', 
+                        zorder=3, fontfamily=font_config['family'], style='italic', color='gray')
+                
+                ax.text(pos[0], metrics_y_start - 3*line_spacing, f"AAE: {aae:.1f}",
+                        fontsize=font_config['tick_size'], ha='center', va='center', 
+                        zorder=3, fontfamily=font_config['family'])
+                
+                ax.text(pos[0], metrics_y_start - 4*line_spacing, f"(var: {aae_var:.1f})",
+                        fontsize=font_config['tick_size']-1, ha='center', va='center', 
+                        zorder=3, fontfamily=font_config['family'], style='italic', color='gray')
+            else:
+                ax.text(pos[0], metrics_y_start - 2*line_spacing, f"AAE: {aae:.1f}",
+                        fontsize=font_config['tick_size'], ha='center', va='center', 
+                        zorder=3, fontfamily=font_config['family'])
             
         elif struct_metrics:
             # If no checkpoint data, show structural op results
@@ -413,6 +441,8 @@ def main():
                        help='Repetition ID to visualize (default: 0)')
     parser.add_argument('--no-structural-ops', action='store_true',
                        help='Hide structural operation metrics on edges')
+    parser.add_argument('--show-within-variance', action='store_true',
+                       help='Show within-run variance in node metrics')
     
     args = parser.parse_args()
     
@@ -428,7 +458,8 @@ def main():
         metadata,
         args.output,
         repetition_id=args.repetition,
-        show_structural_ops=not args.no_structural_ops
+        show_structural_ops=not args.no_structural_ops,
+        show_within_variance=args.show_within_variance
     )
         
 if __name__ == '__main__':

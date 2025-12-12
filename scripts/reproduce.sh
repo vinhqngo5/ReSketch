@@ -29,7 +29,7 @@ run_and_viz() {
         local new_name="$OUTPUT_DIR/${viz_name}_results.json"
         if mv "$json_file" "$new_name" 2>/dev/null; then
             echo "Visualizing ${viz_name}..."
-            python "scripts/visualize_${viz_name}.py" --input "$new_name" --output "$OUTPUT_DIR/$viz_name" 2>&1
+            python "scripts/visualize_${viz_name}.py" --input "$new_name" --output "$OUTPUT_DIR/$viz_name" --show-within-variance 2>&1
         else
             echo "Warning: Failed to move JSON file for ${viz_name}"
         fi
@@ -43,7 +43,7 @@ run_and_viz "sensitivity_experiment" "sensitivity" \
     --app.dataset_type caida \
     --app.repetitions 30 \
     --app.memory_budget_kb 32 \
-    --app.total_items 1000000 \
+    --app.total_items 10000000 \
     --app.stream_size 10000000 &
 
 run_and_viz "expansion_experiment" "expansion" \
@@ -52,8 +52,8 @@ run_and_viz "expansion_experiment" "expansion" \
     --app.memory_increment_kb 8 \
     --app.initial_memory_kb 32 \
     --app.expansion_interval 100000 \
-    --app.total_items 10000000 \
-    --app.stream_size 10000000 &
+    --app.total_items 30000000 \
+    --app.stream_size 20000000 &
 
 run_and_viz "shrinking_experiment" "shrinking" \
     --app.repetitions 30 \
@@ -77,6 +77,8 @@ run_and_viz "split_experiment" "split" \
     --app.repetitions 30 \
     --app.memory_budget_kb 32 \
     --app.stream_size 10000000 &
+
+run_and_viz "dag_experiment" "dag" "examples/dag/simple_dag.YAML" &
 
 # Wait for all background jobs to complete
 wait

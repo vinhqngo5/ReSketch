@@ -74,6 +74,8 @@ struct SplitConfig {
 struct AccuracyMetrics {
     double are = 0.0;
     double aae = 0.0;
+    double are_variance = 0.0;
+    double aae_variance = 0.0;
 };
 
 struct SketchMetrics {
@@ -128,11 +130,31 @@ void export_to_json(const string &filename, const SplitConfig &app_config, const
                          {"sketch_a_direct", {{"memory_bytes", result.sketch_a_direct.memory_bytes}, {"process_time_s", result.sketch_a_direct.process_time_s}}},
                          {"sketch_b_direct", {{"memory_bytes", result.sketch_b_direct.memory_bytes}, {"process_time_s", result.sketch_b_direct.process_time_s}}},
                          {"split_time_s", result.split_time_s},
-                         {"a_prime_vs_true_on_da", {{"are", result.a_prime_vs_true_on_da.are}, {"aae", result.a_prime_vs_true_on_da.aae}}},
-                         {"b_prime_vs_true_on_db", {{"are", result.b_prime_vs_true_on_db.are}, {"aae", result.b_prime_vs_true_on_db.aae}}},
-                         {"a_vs_true_on_da", {{"are", result.a_vs_true_on_da.are}, {"aae", result.a_vs_true_on_da.aae}}},
-                         {"b_vs_true_on_db", {{"are", result.b_vs_true_on_db.are}, {"aae", result.b_vs_true_on_db.aae}}},
-                         {"c_vs_true_on_all", {{"are", result.c_vs_true_on_all.are}, {"aae", result.c_vs_true_on_all.aae}}}};
+                         {"a_prime_vs_true_on_da",
+                          {{"are", result.a_prime_vs_true_on_da.are},
+                           {"aae", result.a_prime_vs_true_on_da.aae},
+                           {"are_variance", result.a_prime_vs_true_on_da.are_variance},
+                           {"aae_variance", result.a_prime_vs_true_on_da.aae_variance}}},
+                         {"b_prime_vs_true_on_db",
+                          {{"are", result.b_prime_vs_true_on_db.are},
+                           {"aae", result.b_prime_vs_true_on_db.aae},
+                           {"are_variance", result.b_prime_vs_true_on_db.are_variance},
+                           {"aae_variance", result.b_prime_vs_true_on_db.aae_variance}}},
+                         {"a_vs_true_on_da",
+                          {{"are", result.a_vs_true_on_da.are},
+                           {"aae", result.a_vs_true_on_da.aae},
+                           {"are_variance", result.a_vs_true_on_da.are_variance},
+                           {"aae_variance", result.a_vs_true_on_da.aae_variance}}},
+                         {"b_vs_true_on_db",
+                          {{"are", result.b_vs_true_on_db.are},
+                           {"aae", result.b_vs_true_on_db.aae},
+                           {"are_variance", result.b_vs_true_on_db.are_variance},
+                           {"aae_variance", result.b_vs_true_on_db.aae_variance}}},
+                         {"c_vs_true_on_all",
+                          {{"are", result.c_vs_true_on_all.are},
+                           {"aae", result.c_vs_true_on_all.aae},
+                           {"are_variance", result.c_vs_true_on_all.are_variance},
+                           {"aae_variance", result.c_vs_true_on_all.aae_variance}}}};
         j["results"].push_back(rep_json);
     }
 
@@ -280,45 +302,87 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         double total_rel_error_a_prime = 0.0, total_abs_error_a_prime = 0.0;
         double total_rel_error_b_prime = 0.0, total_abs_error_b_prime = 0.0;
         int count_a_prime = 0, count_b_prime = 0;
+        vector<double> a_prime_rel_errors, a_prime_abs_errors;
+        vector<double> b_prime_rel_errors, b_prime_abs_errors;
 
         for (const auto &[item, true_freq] : true_freqs_all) {
             double est_freq;
             if (sketch_A_prime.is_responsible_for(item)) {
                 // Item belongs to A' partition
                 est_freq = sketch_A_prime.estimate(item);
-                if (true_freq > 0) { total_rel_error_a_prime += std::abs(est_freq - true_freq) / true_freq; }
-                total_abs_error_a_prime += std::abs(est_freq - true_freq);
+                double rel_error = (true_freq > 0) ? (std::abs(est_freq - true_freq) / true_freq) : 0.0;
+                double abs_error = std::abs(est_freq - true_freq);
+                total_rel_error_a_prime += rel_error;
+                total_abs_error_a_prime += abs_error;
+                a_prime_rel_errors.push_back(rel_error);
+                a_prime_abs_errors.push_back(abs_error);
                 count_a_prime++;
             } else {
                 // Item belongs to B' partition
                 est_freq = sketch_B_prime.estimate(item);
-                if (true_freq > 0) { total_rel_error_b_prime += std::abs(est_freq - true_freq) / true_freq; }
-                total_abs_error_b_prime += std::abs(est_freq - true_freq);
+                double rel_error = (true_freq > 0) ? (std::abs(est_freq - true_freq) / true_freq) : 0.0;
+                double abs_error = std::abs(est_freq - true_freq);
+                total_rel_error_b_prime += rel_error;
+                total_abs_error_b_prime += abs_error;
+                b_prime_rel_errors.push_back(rel_error);
+                b_prime_abs_errors.push_back(abs_error);
                 count_b_prime++;
             }
         }
 
         result.a_prime_vs_true_on_da.are = count_a_prime > 0 ? total_rel_error_a_prime / count_a_prime : 0.0;
         result.a_prime_vs_true_on_da.aae = count_a_prime > 0 ? total_abs_error_a_prime / count_a_prime : 0.0;
+
+        // Calculate variance for A'
+        if (!a_prime_rel_errors.empty()) {
+            double sum_sq = 0.0;
+            for (double v : a_prime_rel_errors) sum_sq += (v - result.a_prime_vs_true_on_da.are) * (v - result.a_prime_vs_true_on_da.are);
+            result.a_prime_vs_true_on_da.are_variance = sum_sq / a_prime_rel_errors.size();
+        }
+        if (!a_prime_abs_errors.empty()) {
+            double sum_sq = 0.0;
+            for (double v : a_prime_abs_errors) sum_sq += (v - result.a_prime_vs_true_on_da.aae) * (v - result.a_prime_vs_true_on_da.aae);
+            result.a_prime_vs_true_on_da.aae_variance = sum_sq / a_prime_abs_errors.size();
+        }
+
         cout << "  A' (split) on its partition (" << count_a_prime << " items): ARE=" << result.a_prime_vs_true_on_da.are << ", AAE=" << result.a_prime_vs_true_on_da.aae << endl;
 
         result.b_prime_vs_true_on_db.are = count_b_prime > 0 ? total_rel_error_b_prime / count_b_prime : 0.0;
         result.b_prime_vs_true_on_db.aae = count_b_prime > 0 ? total_abs_error_b_prime / count_b_prime : 0.0;
+
+        // Calculate variance for B'
+        if (!b_prime_rel_errors.empty()) {
+            double sum_sq = 0.0;
+            for (double v : b_prime_rel_errors) sum_sq += (v - result.b_prime_vs_true_on_db.are) * (v - result.b_prime_vs_true_on_db.are);
+            result.b_prime_vs_true_on_db.are_variance = sum_sq / b_prime_rel_errors.size();
+        }
+        if (!b_prime_abs_errors.empty()) {
+            double sum_sq = 0.0;
+            for (double v : b_prime_abs_errors) sum_sq += (v - result.b_prime_vs_true_on_db.aae) * (v - result.b_prime_vs_true_on_db.aae);
+            result.b_prime_vs_true_on_db.aae_variance = sum_sq / b_prime_abs_errors.size();
+        }
+
         cout << "  B' (split) on its partition (" << count_b_prime << " items): ARE=" << result.b_prime_vs_true_on_db.are << ", AAE=" << result.b_prime_vs_true_on_db.aae << endl;
 
         // A (direct) vs true on DA items: baseline
         result.a_vs_true_on_da.are = calculate_are_all_items(sketch_A, true_freqs_A);
         result.a_vs_true_on_da.aae = calculate_aae_all_items(sketch_A, true_freqs_A);
+        result.a_vs_true_on_da.are_variance = calculate_are_variance(sketch_A, true_freqs_A, result.a_vs_true_on_da.are);
+        result.a_vs_true_on_da.aae_variance = calculate_aae_variance(sketch_A, true_freqs_A, result.a_vs_true_on_da.aae);
         cout << "  A (direct) vs True on DA: ARE=" << result.a_vs_true_on_da.are << ", AAE=" << result.a_vs_true_on_da.aae << endl;
 
         // B (direct) vs true on DB items: baseline
         result.b_vs_true_on_db.are = calculate_are_all_items(sketch_B, true_freqs_B);
         result.b_vs_true_on_db.aae = calculate_aae_all_items(sketch_B, true_freqs_B);
+        result.b_vs_true_on_db.are_variance = calculate_are_variance(sketch_B, true_freqs_B, result.b_vs_true_on_db.are);
+        result.b_vs_true_on_db.aae_variance = calculate_aae_variance(sketch_B, true_freqs_B, result.b_vs_true_on_db.aae);
         cout << "  B (direct) vs True on DB: ARE=" << result.b_vs_true_on_db.are << ", AAE=" << result.b_vs_true_on_db.aae << endl;
 
         // C (full) vs true on all items
         result.c_vs_true_on_all.are = calculate_are_all_items(sketch_C, true_freqs_all);
         result.c_vs_true_on_all.aae = calculate_aae_all_items(sketch_C, true_freqs_all);
+        result.c_vs_true_on_all.are_variance = calculate_are_variance(sketch_C, true_freqs_all, result.c_vs_true_on_all.are);
+        result.c_vs_true_on_all.aae_variance = calculate_aae_variance(sketch_C, true_freqs_all, result.c_vs_true_on_all.aae);
         cout << "  C (full) vs True on All: ARE=" << result.c_vs_true_on_all.are << ", AAE=" << result.c_vs_true_on_all.aae << endl;
 
         all_results.push_back(result);

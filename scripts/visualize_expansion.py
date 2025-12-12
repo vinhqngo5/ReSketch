@@ -13,11 +13,15 @@ def aggregate_results(results_dict):
     aggregated = {}
     
     for sketch_name, repetitions in results_dict.items():
+        # if sketch_name == 'CountMin':
+        #     continue
         items_list = []
         throughput_list = []
         query_throughput_list = []
         are_list = []
         aae_list = []
+        are_var_list = []
+        aae_var_list = []
         memory_list = []
         
         for rep_data in repetitions:
@@ -27,6 +31,10 @@ def aggregate_results(results_dict):
             query_throughput = [cp['query_throughput_mops'] for cp in checkpoints]
             are = [cp['are'] for cp in checkpoints]
             aae = [cp['aae'] for cp in checkpoints]
+            # are_var = [cp.get('are_variance', 0.0) for cp in checkpoints]
+            # aae_var = [cp.get('aae_variance', 0.0) for cp in checkpoints]
+            are_var = [np.log(cp.get('are_variance', 0.0)) for cp in checkpoints]
+            aae_var = [np.log(cp.get('aae_variance', 0.0)) for cp in checkpoints]
             memory = [cp['memory_bytes'] / 1024 if 'memory_bytes' in cp else cp.get('memory_kb', 0) for cp in checkpoints]
             
             items_list.append(items)
@@ -34,6 +42,8 @@ def aggregate_results(results_dict):
             query_throughput_list.append(query_throughput)
             are_list.append(are)
             aae_list.append(aae)
+            are_var_list.append(are_var)
+            aae_var_list.append(aae_var)
             memory_list.append(memory)
         
         items_array = np.array(items_list[0])
@@ -41,6 +51,8 @@ def aggregate_results(results_dict):
         query_throughput_array = np.array(query_throughput_list)
         are_array = np.array(are_list)
         aae_array = np.array(aae_list)
+        are_var_array = np.array(are_var_list)
+        aae_var_array = np.array(aae_var_list)
         memory_array = np.array(memory_list)
         
         aggregated[sketch_name] = {
@@ -53,18 +65,24 @@ def aggregate_results(results_dict):
             'are_std': np.std(are_array, axis=0),
             'aae_mean': np.mean(aae_array, axis=0),
             'aae_std': np.std(aae_array, axis=0),
+            'are_var_mean': np.mean(are_var_array, axis=0),
+            'are_var_std': np.std(are_var_array, axis=0),
+            'aae_var_mean': np.mean(aae_var_array, axis=0),
+            'aae_var_std': np.std(aae_var_array, axis=0),
             'memory_mean': np.mean(memory_array, axis=0),
             'memory_std': np.std(memory_array, axis=0),
         }
     
     return aggregated
 
-def plot_results(config, aggregated, output_path, plot_every_n_points=1):
+def plot_results(config, aggregated, output_path, plot_every_n_points=1, show_within_variance=True):
     material_colors = load_material_colors("scripts/colors/material-colors.json")
     
     font_config = setup_fonts(__file__)
     
-    fig, axes = plt.subplots(5, 1, figsize=(6.45, 10), sharex=True)
+    num_plots = 7 if show_within_variance else 5
+    fig_height = 14 if show_within_variance else 10
+    fig, axes = plt.subplots(num_plots, 1, figsize=(6.45, fig_height), sharex=True)
     
     styles = get_sketch_styles(material_colors)
     
@@ -148,12 +166,53 @@ def plot_results(config, aggregated, output_path, plot_every_n_points=1):
         
         plot_line_with_error(ax_memory, items_sampled, mean_sampled, std_sampled, style)
     
-    style_axis(ax_memory, font_config, 
-              xlabel='Items Processed (millions)',
-              ylabel='Memory (KB)')
+    if show_within_variance:
+        style_axis(ax_memory, font_config, ylabel='Memory (KB)')
+    else:
+        style_axis(ax_memory, font_config, 
+                  xlabel='Items Processed (millions)',
+                  ylabel='Memory (KB)')
     
+    if show_within_variance:
+        # ARE within-run variance
+        ax_are_var = axes[5]
+        for sketch_name, data in aggregated.items():
+            style = styles.get(sketch_name, {})
+            items = data['items'] / 1e6
+            mean = data['are_var_mean']
+            std = data['are_var_std']
+            
+            indices = np.arange(0, len(items), plot_every_n_points)
+            items_sampled = items[indices]
+            mean_sampled = mean[indices]
+            std_sampled = std[indices]
+            
+            plot_line_with_error(ax_are_var, items_sampled, mean_sampled, std_sampled, style)
+        
+        style_axis(ax_are_var, font_config, ylabel='ARE Variance\n(within-run)')
+        
+        # AAE within-run variance
+        ax_aae_var = axes[6]
+        for sketch_name, data in aggregated.items():
+            style = styles.get(sketch_name, {})
+            items = data['items'] / 1e6
+            mean = data['aae_var_mean']
+            std = data['aae_var_std']
+            
+            indices = np.arange(0, len(items), plot_every_n_points)
+            items_sampled = items[indices]
+            mean_sampled = mean[indices]
+            std_sampled = std[indices]
+            
+            plot_line_with_error(ax_aae_var, items_sampled, mean_sampled, std_sampled, style)
+        
+        style_axis(ax_aae_var, font_config, 
+                  xlabel='Items Processed (millions)',
+                  ylabel='AAE Variance\n(within-run)')
+    
+    top_adjust = 0.98 if show_within_variance else 0.96
     create_shared_legend(fig, ax_throughput, ncol=5, font_config=font_config,
-                        bbox_to_anchor=(0.5, 1.02), top_adjust=0.96)
+                        bbox_to_anchor=(0.5, 1.02), top_adjust=top_adjust)
     
     plt.tight_layout()
     
@@ -180,6 +239,11 @@ def main():
         type=int,
         default=4,
         help='Plot 1 point for every N points (default: 1, plot all points). Use higher values (e.g., 5) to reduce clutter.'
+    )
+    parser.add_argument(
+        '--show-within-variance',
+        action='store_true',
+        help='Show within-run variance plots (ARE/AAE variance)'
     )
     
     args = parser.parse_args()
@@ -235,7 +299,9 @@ def main():
     
     print("Generating plots...")
     print(f"  Plotting every {args.plot_every} point(s)")
-    plot_results(config, aggregated, args.output, plot_every_n_points=args.plot_every)
+    print(f"  Show within-run variance: {args.show_within_variance}")
+    plot_results(config, aggregated, args.output, plot_every_n_points=args.plot_every,
+                show_within_variance=args.show_within_variance)
     
     print("\nDone!")
 

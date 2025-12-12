@@ -92,6 +92,8 @@ struct Checkpoint {
     uint64_t memory_kb;
     double are;
     double aae;
+    double are_variance;
+    double aae_variance;
 };
 
 void export_to_json(const string &filename, const ExpansionConfig &config, const CountMinConfig &cm_config, const ReSketchConfig &rs_config, const GeometricSketchConfig &gs_config,
@@ -143,7 +145,9 @@ void export_to_json(const string &filename, const ExpansionConfig &config, const
                                 {"throughput_mops", cp.throughput_mops},
                                 {"query_throughput_mops", cp.query_throughput_mops},
                                 {"are", cp.are},
-                                {"aae", cp.aae}};
+                                {"aae", cp.aae},
+                                {"are_variance", cp.are_variance},
+                                {"aae_variance", cp.aae_variance}};
                 checkpoints_array.push_back(cp_json);
             }
 
@@ -312,6 +316,18 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
             static_rs_cp.aae = calculate_aae_all_items(static_rs_sketch, true_freqs_at_checkpoint);
             gs_cp.aae = calculate_aae_all_items(gs_sketch, true_freqs_at_checkpoint);
             ds_cp.aae = calculate_aae_all_items(ds_sketch, true_freqs_at_checkpoint);
+
+            cm_cp.are_variance = calculate_are_variance(cm_sketch, true_freqs_at_checkpoint, cm_cp.are);
+            rs_cp.are_variance = calculate_are_variance(rs_sketch, true_freqs_at_checkpoint, rs_cp.are);
+            static_rs_cp.are_variance = calculate_are_variance(static_rs_sketch, true_freqs_at_checkpoint, static_rs_cp.are);
+            gs_cp.are_variance = calculate_are_variance(gs_sketch, true_freqs_at_checkpoint, gs_cp.are);
+            ds_cp.are_variance = calculate_are_variance(ds_sketch, true_freqs_at_checkpoint, ds_cp.are);
+
+            cm_cp.aae_variance = calculate_aae_variance(cm_sketch, true_freqs_at_checkpoint, cm_cp.aae);
+            rs_cp.aae_variance = calculate_aae_variance(rs_sketch, true_freqs_at_checkpoint, rs_cp.aae);
+            static_rs_cp.aae_variance = calculate_aae_variance(static_rs_sketch, true_freqs_at_checkpoint, static_rs_cp.aae);
+            gs_cp.aae_variance = calculate_aae_variance(gs_sketch, true_freqs_at_checkpoint, gs_cp.aae);
+            ds_cp.aae_variance = calculate_aae_variance(ds_sketch, true_freqs_at_checkpoint, ds_cp.aae);
 
             // Measure query throughput on all unique items
             vector<uint64_t> unique_items;

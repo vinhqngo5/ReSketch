@@ -19,7 +19,7 @@ visualize_if_exists() {
     
     if [ -f "$json_pattern" ]; then
         echo "Visualizing ${exp_name}..."
-        python "scripts/visualize_${exp_name}.py" --input "$json_pattern" --output "${FOLDER}/${exp_name}" 2>&1
+        python "scripts/visualize_${exp_name}.py" --input "$json_pattern" --output "${FOLDER}/${exp_name}" --show-within-variance 2>&1
         if [ $? -eq 0 ]; then
             echo "${exp_name} visualization complete"
         else

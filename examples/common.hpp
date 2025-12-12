@@ -59,6 +59,29 @@ template <typename SketchType> double calculate_aae_all_items(const SketchType &
     return total_abs_error / true_freqs.size();
 }
 
+// Variance calculation functions
+template <typename SketchType> double calculate_are_variance(const SketchType &sketch, const std::map<uint64_t, uint64_t> &true_freqs, double mean_are) {
+    if (true_freqs.empty()) return 0.0;
+    double sum_sq = 0.0;
+    for (const auto &[item, true_freq] : true_freqs) {
+        double est_freq = sketch.estimate(item);
+        double rel_error = (true_freq > 0) ? (std::abs(est_freq - true_freq) / true_freq) : 0.0;
+        sum_sq += (rel_error - mean_are) * (rel_error - mean_are);
+    }
+    return sum_sq / true_freqs.size();
+}
+
+template <typename SketchType> double calculate_aae_variance(const SketchType &sketch, const std::map<uint64_t, uint64_t> &true_freqs, double mean_aae) {
+    if (true_freqs.empty()) return 0.0;
+    double sum_sq = 0.0;
+    for (const auto &[item, true_freq] : true_freqs) {
+        double est_freq = sketch.estimate(item);
+        double abs_error = std::abs(est_freq - true_freq);
+        sum_sq += (abs_error - mean_aae) * (abs_error - mean_aae);
+    }
+    return sum_sq / true_freqs.size();
+}
+
 // Frequency comparison printing
 // Each sketch is passed with a name, and the function will print a comparison table with true frequency and estimated frequency from each sketch for the given items
 template <typename... SketchTypes>

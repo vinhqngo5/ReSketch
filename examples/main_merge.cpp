@@ -88,6 +88,8 @@ struct MergeResult {
     struct AccuracyComparison {
         double are;
         double aae;
+        double are_variance;
+        double aae_variance;
     };
 
     AccuracyComparison a_vs_true_on_da;    // Sketch A's accuracy on DA items
@@ -127,10 +129,27 @@ void export_to_json(const string &filename, const MergeConfig &config, const ReS
                          {"sketch_c_merged", {{"memory_bytes", r.sketch_c_merged.memory_bytes}, {"merge_time_s", r.merge_time_s}}},
                          {"sketch_d_ground_truth", {{"memory_bytes", r.sketch_d_ground_truth.memory_bytes}, {"process_time_s", r.sketch_d_ground_truth.process_time_s}}},
                          {"accuracy",
-                          {{"a_vs_true_on_da", {{"are", r.a_vs_true_on_da.are}, {"aae", r.a_vs_true_on_da.aae}}},
-                           {"b_vs_true_on_db", {{"are", r.b_vs_true_on_db.are}, {"aae", r.b_vs_true_on_db.aae}}},
-                           {"c_vs_true_on_all", {{"are", r.c_vs_true_on_all.are}, {"aae", r.c_vs_true_on_all.aae}}},
-                           {"d_vs_true_on_all", {{"are", r.d_vs_true_on_all.are}, {"aae", r.d_vs_true_on_all.aae}}}}}};
+                          {{"a_vs_true_on_da",
+                            {{"are", r.a_vs_true_on_da.are},
+                             {"aae", r.a_vs_true_on_da.aae},
+                             {"are_variance", r.a_vs_true_on_da.are_variance},
+                             {"aae_variance", r.a_vs_true_on_da.aae_variance}}},
+                           {"b_vs_true_on_db",
+                            {{"are", r.b_vs_true_on_db.are},
+                             {"aae", r.b_vs_true_on_db.aae},
+                             {"are_variance", r.b_vs_true_on_db.are_variance},
+                             {"aae_variance", r.b_vs_true_on_db.aae_variance}}},
+                           {"c_vs_true_on_all",
+                            {{"are", r.c_vs_true_on_all.are},
+                             {"aae", r.c_vs_true_on_all.aae},
+                             {"are_variance", r.c_vs_true_on_all.are_variance},
+                             {"aae_variance", r.c_vs_true_on_all.aae_variance}}},
+                           {"d_vs_true_on_all",
+                            {{"are", r.d_vs_true_on_all.are},
+                             {"aae", r.d_vs_true_on_all.aae},
+                             {"are_variance", r.d_vs_true_on_all.are_variance},
+                             {"aae_variance", r.d_vs_true_on_all.aae_variance}}}}}};
+        ;
         j["results"].push_back(rep_json);
     }
 
@@ -276,21 +295,29 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
         // A vs true on DA items: How accurate is sketch A?
         result.a_vs_true_on_da.are = calculate_are_all_items(sketch_A, true_freqs_A);
         result.a_vs_true_on_da.aae = calculate_aae_all_items(sketch_A, true_freqs_A);
+        result.a_vs_true_on_da.are_variance = calculate_are_variance(sketch_A, true_freqs_A, result.a_vs_true_on_da.are);
+        result.a_vs_true_on_da.aae_variance = calculate_aae_variance(sketch_A, true_freqs_A, result.a_vs_true_on_da.aae);
         cout << "  A vs True on DA: ARE=" << result.a_vs_true_on_da.are << ", AAE=" << result.a_vs_true_on_da.aae << endl;
 
         // B vs true on DB items: How accurate is sketch B?
         result.b_vs_true_on_db.are = calculate_are_all_items(sketch_B, true_freqs_B);
         result.b_vs_true_on_db.aae = calculate_aae_all_items(sketch_B, true_freqs_B);
+        result.b_vs_true_on_db.are_variance = calculate_are_variance(sketch_B, true_freqs_B, result.b_vs_true_on_db.are);
+        result.b_vs_true_on_db.aae_variance = calculate_aae_variance(sketch_B, true_freqs_B, result.b_vs_true_on_db.aae);
         cout << "  B vs True on DB: ARE=" << result.b_vs_true_on_db.are << ", AAE=" << result.b_vs_true_on_db.aae << endl;
 
         // C (merged) vs true on all items: How accurate is the merged sketch?
         result.c_vs_true_on_all.are = calculate_are_all_items(sketch_C, true_freqs_all);
         result.c_vs_true_on_all.aae = calculate_aae_all_items(sketch_C, true_freqs_all);
+        result.c_vs_true_on_all.are_variance = calculate_are_variance(sketch_C, true_freqs_all, result.c_vs_true_on_all.are);
+        result.c_vs_true_on_all.aae_variance = calculate_aae_variance(sketch_C, true_freqs_all, result.c_vs_true_on_all.aae);
         cout << "  C (merged) vs True on All: ARE=" << result.c_vs_true_on_all.are << ", AAE=" << result.c_vs_true_on_all.aae << endl;
 
         // D (ground truth) vs true on all items: How accurate is the double-width sketch?
         result.d_vs_true_on_all.are = calculate_are_all_items(sketch_D, true_freqs_all);
         result.d_vs_true_on_all.aae = calculate_aae_all_items(sketch_D, true_freqs_all);
+        result.d_vs_true_on_all.are_variance = calculate_are_variance(sketch_D, true_freqs_all, result.d_vs_true_on_all.are);
+        result.d_vs_true_on_all.aae_variance = calculate_aae_variance(sketch_D, true_freqs_all, result.d_vs_true_on_all.aae);
         cout << "  D (ground truth) vs True on All: ARE=" << result.d_vs_true_on_all.are << ", AAE=" << result.d_vs_true_on_all.aae << endl;
 
         all_results.push_back(result);

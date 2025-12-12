@@ -89,6 +89,8 @@ struct Checkpoint {
     uint64_t memory_kb;
     double are;
     double aae;
+    double are_variance;
+    double aae_variance;
 };
 
 // Result
@@ -99,6 +101,8 @@ struct StructuralOpResult {
     uint64_t memory_kb;
     double are;
     double aae;
+    double are_variance;
+    double aae_variance;
 };
 
 struct RepetitionResult {
@@ -270,6 +274,8 @@ void process_data_with_checkpoints(ReSketchV2 &sketch, const vector<uint64_t> &d
             // Calculate error metrics
             double are = calculate_are_all_items(sketch, ground_truth);
             double aae = calculate_aae_all_items(sketch, ground_truth);
+            double are_variance = calculate_are_variance(sketch, ground_truth, are);
+            double aae_variance = calculate_aae_variance(sketch, ground_truth, aae);
 
             // Record checkpoint
             Checkpoint cp;
@@ -280,6 +286,8 @@ void process_data_with_checkpoints(ReSketchV2 &sketch, const vector<uint64_t> &d
             cp.memory_kb = sketch.get_max_memory_usage() / 1024;
             cp.are = are;
             cp.aae = aae;
+            cp.are_variance = are_variance;
+            cp.aae_variance = aae_variance;
 
             checkpoints_out.push_back(cp);
 
@@ -341,19 +349,27 @@ void export_to_json(const string &filename, const DAGConfig &config, const vecto
 
         rep_json["checkpoints"] = json::array();
         for (const auto &cp : rep.checkpoints) {
-            rep_json["checkpoints"].push_back({{"sketch_name", cp.sketch_name},
-                                               {"items_processed", cp.items_processed},
-                                               {"throughput_mops", cp.throughput_mops},
-                                               {"query_throughput_mops", cp.query_throughput_mops},
-                                               {"memory_kb", cp.memory_kb},
-                                               {"are", cp.are},
-                                               {"aae", cp.aae}});
+            rep_json["checkpoints"].push_back({{{"sketch_name", cp.sketch_name},
+                                                {"items_processed", cp.items_processed},
+                                                {"throughput_mops", cp.throughput_mops},
+                                                {"query_throughput_mops", cp.query_throughput_mops},
+                                                {"memory_kb", cp.memory_kb},
+                                                {"are", cp.are},
+                                                {"aae", cp.aae},
+                                                {"are_variance", cp.are_variance},
+                                                {"aae_variance", cp.aae_variance}}});
         }
 
         rep_json["structural_operations"] = json::array();
         for (const auto &op : rep.structural_ops) {
-            rep_json["structural_operations"].push_back(
-                {{"sketch_name", op.sketch_name}, {"operation", op.operation}, {"latency_s", op.latency_s}, {"memory_kb", op.memory_kb}, {"are", op.are}, {"aae", op.aae}});
+            rep_json["structural_operations"].push_back({{{"sketch_name", op.sketch_name},
+                                                          {"operation", op.operation},
+                                                          {"latency_s", op.latency_s},
+                                                          {"memory_kb", op.memory_kb},
+                                                          {"are", op.are},
+                                                          {"aae", op.aae},
+                                                          {"are_variance", op.are_variance},
+                                                          {"aae_variance", op.aae_variance}}});
         }
 
         j["results"].push_back(rep_json);
@@ -458,6 +474,8 @@ void run_dag_experiment(const DAGConfig &config) {
 
                     double are = calculate_are_all_items(*sketches[sketch_name], sketch_ground_truths[sketch_name]);
                     double aae = calculate_aae_all_items(*sketches[sketch_name], sketch_ground_truths[sketch_name]);
+                    double are_variance = calculate_are_variance(*sketches[sketch_name], sketch_ground_truths[sketch_name], are);
+                    double aae_variance = calculate_aae_variance(*sketches[sketch_name], sketch_ground_truths[sketch_name], aae);
 
                     StructuralOpResult op_result;
                     op_result.sketch_name = sketch_name;
@@ -466,6 +484,8 @@ void run_dag_experiment(const DAGConfig &config) {
                     op_result.memory_kb = sketches[sketch_name]->get_max_memory_usage() / 1024;
                     op_result.are = are;
                     op_result.aae = aae;
+                    op_result.are_variance = are_variance;
+                    op_result.aae_variance = aae_variance;
                     rep_result.structural_ops.push_back(op_result);
 
                     uint64_t actual_memory_kb = sketches[sketch_name]->get_max_memory_usage() / 1024;
@@ -494,6 +514,8 @@ void run_dag_experiment(const DAGConfig &config) {
 
                     double are = calculate_are_all_items(*sketches[sketch_name], sketch_ground_truths[sketch_name]);
                     double aae = calculate_aae_all_items(*sketches[sketch_name], sketch_ground_truths[sketch_name]);
+                    double are_variance = calculate_are_variance(*sketches[sketch_name], sketch_ground_truths[sketch_name], are);
+                    double aae_variance = calculate_aae_variance(*sketches[sketch_name], sketch_ground_truths[sketch_name], aae);
 
                     StructuralOpResult op_result;
                     op_result.sketch_name = sketch_name;
@@ -502,6 +524,8 @@ void run_dag_experiment(const DAGConfig &config) {
                     op_result.memory_kb = sketches[sketch_name]->get_max_memory_usage() / 1024;
                     op_result.are = are;
                     op_result.aae = aae;
+                    op_result.are_variance = are_variance;
+                    op_result.aae_variance = aae_variance;
                     rep_result.structural_ops.push_back(op_result);
 
                     uint64_t actual_memory_kb = sketches[sketch_name]->get_max_memory_usage() / 1024;
@@ -539,6 +563,8 @@ void run_dag_experiment(const DAGConfig &config) {
 
                     double are = calculate_are_all_items(*sketches[sketch_name], sketch_ground_truths[sketch_name]);
                     double aae = calculate_aae_all_items(*sketches[sketch_name], sketch_ground_truths[sketch_name]);
+                    double are_variance = calculate_are_variance(*sketches[sketch_name], sketch_ground_truths[sketch_name], are);
+                    double aae_variance = calculate_aae_variance(*sketches[sketch_name], sketch_ground_truths[sketch_name], aae);
 
                     StructuralOpResult op_result;
                     op_result.sketch_name = sketch_name;
@@ -547,6 +573,8 @@ void run_dag_experiment(const DAGConfig &config) {
                     op_result.memory_kb = sketches[sketch_name]->get_max_memory_usage() / 1024;
                     op_result.are = are;
                     op_result.aae = aae;
+                    op_result.are_variance = are_variance;
+                    op_result.aae_variance = aae_variance;
                     rep_result.structural_ops.push_back(op_result);
 
                     uint64_t actual_memory_kb = sketches[sketch_name]->get_max_memory_usage() / 1024;
@@ -611,6 +639,8 @@ void run_dag_experiment(const DAGConfig &config) {
 
                     double are = calculate_are_all_items(*sketches[sketch_name], sketch_ground_truths[sketch_name]);
                     double aae = calculate_aae_all_items(*sketches[sketch_name], sketch_ground_truths[sketch_name]);
+                    double are_variance = calculate_are_variance(*sketches[sketch_name], sketch_ground_truths[sketch_name], are);
+                    double aae_variance = calculate_aae_variance(*sketches[sketch_name], sketch_ground_truths[sketch_name], aae);
 
                     StructuralOpResult op_result;
                     op_result.sketch_name = sketch_name;
@@ -619,6 +649,8 @@ void run_dag_experiment(const DAGConfig &config) {
                     op_result.memory_kb = sketches[sketch_name]->get_max_memory_usage() / 1024;
                     op_result.are = are;
                     op_result.aae = aae;
+                    op_result.are_variance = are_variance;
+                    op_result.aae_variance = aae_variance;
                     rep_result.structural_ops.push_back(op_result);
 
                     double are2 = calculate_are_all_items(*sketches[sibling_name], sketch_ground_truths[sibling_name]);

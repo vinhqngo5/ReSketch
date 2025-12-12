@@ -272,33 +272,8 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
             double aae = calculate_aae_all_items(cm_sketch, true_freqs);
 
             // Compute within-run variance across items for relative and absolute errors
-            vector<double> are_errors;
-            vector<double> aae_errors;
-            are_errors.reserve(true_freqs.size());
-            aae_errors.reserve(true_freqs.size());
-            for (const auto &p : true_freqs) {
-                uint64_t item = p.first;
-                uint64_t true_freq = p.second;
-                double est_freq = cm_sketch.estimate(item);
-                double rel_error = (true_freq > 0) ? (std::abs(est_freq - (double) true_freq) / (double) true_freq) : 0.0;
-                are_errors.push_back(rel_error);
-                aae_errors.push_back(std::abs(est_freq - (double) true_freq));
-            }
-
-            double are_var_within = 0.0;
-            double aae_var_within = 0.0;
-            if (!are_errors.empty()) {
-                double mean_are = are;
-                double sum_sq = 0.0;
-                for (double v : are_errors) sum_sq += (v - mean_are) * (v - mean_are);
-                are_var_within = sum_sq / are_errors.size();
-            }
-            if (!aae_errors.empty()) {
-                double mean_aae = aae;
-                double sum_sq = 0.0;
-                for (double v : aae_errors) sum_sq += (v - mean_aae) * (v - mean_aae);
-                aae_var_within = sum_sq / aae_errors.size();
-            }
+            double are_var_within = calculate_are_variance(cm_sketch, true_freqs, are);
+            double aae_var_within = calculate_aae_variance(cm_sketch, true_freqs, aae);
 
             SensitivityResult result;
             result.algorithm = "CountMin";
@@ -352,33 +327,8 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
                 double aae = calculate_aae_all_items(rs_sketch, true_freqs);
 
                 // Compute within-run variance across items for relative and absolute errors
-                vector<double> are_errors;
-                vector<double> aae_errors;
-                are_errors.reserve(true_freqs.size());
-                aae_errors.reserve(true_freqs.size());
-                for (const auto &p : true_freqs) {
-                    uint64_t item = p.first;
-                    uint64_t true_freq = p.second;
-                    double est_freq = rs_sketch.estimate(item);
-                    double rel_error = (true_freq > 0) ? (std::abs(est_freq - (double) true_freq) / (double) true_freq) : 0.0;
-                    are_errors.push_back(rel_error);
-                    aae_errors.push_back(std::abs(est_freq - (double) true_freq));
-                }
-
-                double are_var_within_rs = 0.0;
-                double aae_var_within_rs = 0.0;
-                if (!are_errors.empty()) {
-                    double mean_are = are;
-                    double sum_sq = 0.0;
-                    for (double v : are_errors) sum_sq += (v - mean_are) * (v - mean_are);
-                    are_var_within_rs = sum_sq / are_errors.size();
-                }
-                if (!aae_errors.empty()) {
-                    double mean_aae = aae;
-                    double sum_sq = 0.0;
-                    for (double v : aae_errors) sum_sq += (v - mean_aae) * (v - mean_aae);
-                    aae_var_within_rs = sum_sq / aae_errors.size();
-                }
+                double are_var_within_rs = calculate_are_variance(rs_sketch, true_freqs, are);
+                double aae_var_within_rs = calculate_aae_variance(rs_sketch, true_freqs, aae);
 
                 SensitivityResult result;
                 result.algorithm = "ReSketch";

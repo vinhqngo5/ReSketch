@@ -96,6 +96,8 @@ struct Checkpoint {
     uint64_t memory_kb;
     double are;
     double aae;
+    double are_variance;
+    double aae_variance;
     // As of now, is_warmup is not really used but reserved for future use if ingesting while warming up is needed
     bool is_warmup;                 // True during warmup expansion phase
     bool geometric_cannot_shrink;   // True when GeometricSketch can't shrink anymore
@@ -151,6 +153,8 @@ void export_to_json(const string &filename, const ShrinkingConfig &config, const
                                              {"memory_bytes", cp.memory_kb * 1024},
                                              {"are", cp.are},
                                              {"aae", cp.aae},
+                                             {"are_variance", cp.are_variance},
+                                             {"aae_variance", cp.aae_variance},
                                              {"is_warmup", cp.is_warmup},
                                              {"geometric_cannot_shrink", cp.geometric_cannot_shrink}});
             }
@@ -330,6 +334,16 @@ void run_shrinking_experiment(const ShrinkingConfig &config, const ReSketchConfi
             static_rs_initial_cp.aae = calculate_aae_all_items(static_rs_initial_sketch, true_freqs_at_checkpoint);
             static_rs_max_cp.aae = calculate_aae_all_items(static_rs_max_sketch, true_freqs_at_checkpoint);
             gs_cp.aae = calculate_aae_all_items(gs_sketch, true_freqs_at_checkpoint);
+
+            rs_cp.are_variance = calculate_are_variance(rs_sketch, true_freqs_at_checkpoint, rs_cp.are);
+            static_rs_initial_cp.are_variance = calculate_are_variance(static_rs_initial_sketch, true_freqs_at_checkpoint, static_rs_initial_cp.are);
+            static_rs_max_cp.are_variance = calculate_are_variance(static_rs_max_sketch, true_freqs_at_checkpoint, static_rs_max_cp.are);
+            gs_cp.are_variance = calculate_are_variance(gs_sketch, true_freqs_at_checkpoint, gs_cp.are);
+
+            rs_cp.aae_variance = calculate_aae_variance(rs_sketch, true_freqs_at_checkpoint, rs_cp.aae);
+            static_rs_initial_cp.aae_variance = calculate_aae_variance(static_rs_initial_sketch, true_freqs_at_checkpoint, static_rs_initial_cp.aae);
+            static_rs_max_cp.aae_variance = calculate_aae_variance(static_rs_max_sketch, true_freqs_at_checkpoint, static_rs_max_cp.aae);
+            gs_cp.aae_variance = calculate_aae_variance(gs_sketch, true_freqs_at_checkpoint, gs_cp.aae);
 
             rs_cp.is_warmup = false;
             static_rs_initial_cp.is_warmup = false;
