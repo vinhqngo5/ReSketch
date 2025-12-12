@@ -20,6 +20,9 @@ The core implementation is in [`src/frequency_summary/resketchv2.hpp`](src/frequ
 git clone https://github.com/vinhqngo5/ReSketch.git
 cd ReSketch
 ./scripts/setup_submodules.sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
 ### Build
