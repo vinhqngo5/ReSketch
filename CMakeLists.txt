@@ -1,10 +1,12 @@
-cmake_minimum_required(VERSION 3.10)
-project(ModernCppStarter)
+cmake_minimum_required(VERSION 3.20)
+project(ReSketch)
 
 # Set the C++ standard
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 set(CMAKE_VERBOSE_MAKEFILE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Find clang-tidy
 find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
@@ -18,30 +20,20 @@ if(CLANG_FORMAT)
   set(CMAKE_CXX_CLANG_FORMAT ${CLANG_FORMAT})
 endif()
 
-# Install gtest and gmock
+# Dependencies
 include(FetchContent)
-FetchContent_Declare(
-  googletest
-  URL  https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
-)
-FetchContent_MakeAvailable(googletest)
-
-# Install yaml-cpp
+# yaml-cpp
 set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_BUILD_CONTRIB OFF CACHE BOOL "" FORCE)
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.10 CACHE STRING "" FORCE)
 FetchContent_Declare(
   yaml-cpp
   GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-  GIT_TAG yaml-cpp-0.6.3
+  GIT_TAG 9a3624205e8774953ef18f57067b3426c1c5ada6  # yaml-cpp-0.6.3
+  GIT_SHALLOW True
 )
 FetchContent_MakeAvailable(yaml-cpp)
-
-# Include the directories
-include_directories(${PROJECT_SOURCE_DIR}/3rd)
-include_directories(${PROJECT_SOURCE_DIR}/include)
-include_directories(${PROJECT_SOURCE_DIR}/src)
 
 # Set output directories for different build types
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/lib/debug)
@@ -50,12 +42,6 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/lib/debug)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/lib/release)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin/debug)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin/release)
-
-# Define cache flags for compilation 
-set(DELELGATION_FLAGS "" CACHE STRING "Flag for compiling the delegation sketch")
-set(FREQUENCY_ESTIMATOR_FLAGS "" CACHE STRING "Flag for compiling the frequency estimator and related files")
-
-
 
 # Add subdirectories
 add_subdirectory(src)
