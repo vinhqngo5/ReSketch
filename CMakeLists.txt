@@ -34,6 +34,8 @@ FetchContent_Declare(
   GIT_SHALLOW True
 )
 FetchContent_MakeAvailable(yaml-cpp)
+# JSON and KLL
+include_directories(${PROJECT_SOURCE_DIR}/3rd)
 
 # Set output directories for different build types
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/lib/debug)
