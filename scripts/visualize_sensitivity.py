@@ -149,6 +149,13 @@ def plot_results(aggregated, output_path, show_within_variance=False):
                 title=plot.title,
             )
 
+        label = f"M = {memory_budget // 1024} KiB"
+        row_axes[0].annotate(label, xy=(-0.15, 0.5), xycoords="axes fraction",
+                             rotation=90, va="center", ha="center",
+                             transform=row_axes[0].transAxes,
+                             fontsize=font_config['label_size'],
+                             fontfamily=font_config['family'])
+
         create_shared_legend(fig, row_axes[0], ncol=4, font_config=font_config,
                             bbox_to_anchor=(0.5, 1.02), top_adjust=0.96)
 
