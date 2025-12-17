@@ -72,14 +72,14 @@ struct SensitivityConfig {
             if (i < config.memory_budgets_kb.size() - 1) os << ", ";
         }
         os << "\n";
-        os << "Repetitions: " << config.repetitions << "\n";
-        os << "Dataset: " << config.dataset_type << "\n";
-        if (config.dataset_type == "caida") { os << "CAIDA Path: " << config.caida_path << "\n"; }
-        os << "Total Items: " << config.total_items << "\n";
-        os << "Dataset Size: " << config.stream_size << "\n";
+        os << format("Repetitions: {}\n", config.repetitions);
+        os << format("Dataset: {}\n", config.dataset_type);
+        if (config.dataset_type == "caida") { os << format("CAIDA Path: {}\n", config.caida_path); }
+        os << format("Total Items: {}\n", config.total_items);
+        os << format("Dataset Size: {}\n", config.stream_size);
         if (config.dataset_type == "zipf") {
-            os << "Stream Diversity: " << config.stream_diversity << "\n";
-            os << "Zipf Parameter: " << config.zipf_param << "\n";
+            os << format("Stream Diversity: {}\n", config.stream_diversity);
+            os << format("Zipf Parameter: {}\n", config.zipf_param);
         }
         os << "ReSketch K values: ";
         for (uint32_t i = 0; i < config.k_values.size(); ++i) {
@@ -93,7 +93,7 @@ struct SensitivityConfig {
             if (i < config.depth_values.size() - 1) os << ", ";
         }
         os << "\n";
-        os << "Output File: " << config.output_file << "\n";
+        os << format("Output File: {}\n", config.output_file);
         return os;
     }
 };
@@ -122,14 +122,10 @@ void export_to_json(const string &filename, const SensitivityConfig &config, con
     json j;
 
     // Metadata section
-    auto now = std::chrono::system_clock::now();
-    auto now_time_t = std::chrono::system_clock::to_time_t(now);
-    std::tm tm_now;
-    gmtime_r(&now_time_t, &tm_now);
-    std::ostringstream timestamp;
-    timestamp << std::put_time(&tm_now, "%Y-%m-%dT%H:%M:%SZ");
+    auto now = chrono::system_clock::now();
+    string timestamp = format("{:%FT%TZ}", chrono::round<chrono::seconds>(now));
 
-    j["metadata"] = {{"experiment_type", "sensitivity"}, {"timestamp", timestamp.str()}};
+    j["metadata"] = {{"experiment_type", "sensitivity"}, {"timestamp", timestamp}};
 
     // Config section
     j["config"]["experiment"] = {
@@ -181,14 +177,14 @@ void export_to_json(const string &filename, const SensitivityConfig &config, con
     // Write to file
     ofstream out(filename);
     if (!out.is_open()) {
-        cerr << "Error: Cannot open output file: " << filename << endl;
+        cerr << format("Error: Cannot open output file: {}\n", filename);
         return;
     }
 
     out << j.dump(2);
     out.close();
 
-    cout << "\nResults exported to: " << filename << endl;
+    cout << format("\nResults exported to: {}\n", filename);
 }
 
 void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinConfig &cm_config, const ReSketchConfig &rs_config) {
@@ -204,14 +200,14 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
     for (auto mem : config.memory_budgets_kb) {
         for (auto depth : config.depth_values) {
             for (auto k : config.k_values) {
-                string config_name = std::format("ReSketch_M{}_d{}_k{}", mem, depth, k);
+                string config_name = format("ReSketch_M{}_d{}_k{}", mem, depth, k);
                 all_results[config_name] = vector<vector<SensitivityResult>>(config.repetitions);
             }
         }
     }
 
     for (uint32_t rep = 0; rep < config.repetitions; ++rep) {
-        cout << "\n=== Repetition " << (rep + 1) << "/" << config.repetitions << " ===" << endl;
+        cout << format("\n=== Repetition {}/{} ===\n", rep + 1, config.repetitions);
 
         // Generate or load dataset
         vector<uint64_t> data;
@@ -226,7 +222,7 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
                 continue;
             }
         } else {
-            cerr << "Error: Unknown dataset type: " << config.dataset_type << ". Skipping repetition." << endl;
+            cerr << format("Error: Unknown dataset type: {}. Skipping repetition.\n", config.dataset_type);
             continue;
         }
 
@@ -241,7 +237,7 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
             data = std::move(extended_data);
         }
 
-        cout << "Processing " << data.size() << " items" << endl;
+        cout << format("Processing {} items\n", data.size());
 
         // Calculate true frequencies
         map<uint64_t, uint64_t> true_freqs;
@@ -257,7 +253,7 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
             // Test Count-Min Sketch
             {
                 uint32_t cm_width = calculate_width_from_memory_cm(memory_budget_bytes, cm_config.depth);
-                cout << "\nCount-Min: depth=" << cm_config.depth << ", width=" << cm_width << endl;
+                cout << format("\nCount-Min: depth={}, width={}\n", cm_config.depth, cm_width);
 
                 CountMinConfig cm_conf = cm_config;
                 cm_conf.width = cm_width;
@@ -302,18 +298,17 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
 
                 all_results["CountMin"][rep].push_back(result);
 
-                cout << "  Throughput: " << throughput << " Mops/s" << endl;
-                cout << "  Query Throughput: " << query_throughput << " Mops/s" << endl;
-                cout << "  Memory used: " << result.memory_used_bytes / 1024 << " KiB" << endl;
-                cout << "  ARE: " << are << ", AAE: " << aae << endl;
+                cout << format("  Throughput: {} Mops/s\n", throughput);
+                cout << format("  Query Throughput: {} Mops/s\n", query_throughput);
+                cout << format("  Memory used: {} KiB\n", result.memory_used_bytes / 1024);
+                cout << format("  ARE: {}, AAE: {}\n", are, aae);
             }
 
             // Test ReSketch with different depth and k values
             for (auto depth : config.depth_values) {
                 for (auto k : config.k_values) {
                     uint32_t rs_width = calculate_width_from_memory_resketch(memory_budget_bytes, depth, k);
-                    // cout << "\nReSketch: depth=" << depth << ", k=" << k << ", width=" << rs_width << endl;
-                    cout << std::format("ReSketch: M={}KiB, depth={}, k={}, width={}\n", memory_budget_kb, depth, k, rs_width);
+                    cout << format("ReSketch: M={}KiB, depth={}, k={}, width={}\n", memory_budget_kb, depth, k, rs_width);
 
                     ReSketchConfig rs_conf = rs_config;
                     rs_conf.depth = depth;
@@ -357,27 +352,22 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
                     result.are_within_var = are_var_within_rs;
                     result.aae_within_var = aae_var_within_rs;
 
-                    string config_name = std::format("ReSketch_M{}_d{}_k{}", memory_budget_kb, depth, k);
+                    string config_name = format("ReSketch_M{}_d{}_k{}", memory_budget_kb, depth, k);
                     all_results[config_name][rep].push_back(result);
 
-                    cout << "  Throughput: " << throughput << " Mops/s" << endl;
-                    cout << "  Query Throughput: " << query_throughput << " Mops/s" << endl;
-                    cout << "  Memory used: " << result.memory_used_bytes / 1024 << " KiB" << endl;
-                    cout << "  ARE: " << are << ", AAE: " << aae << endl;
+                    cout << format("  Throughput: {} Mops/s\n", throughput);
+                    cout << format("  Query Throughput: {} Mops/s\n", query_throughput);
+                    cout << format("  Memory used: {} KiB\n", result.memory_used_bytes / 1024);
+                    cout << format("  ARE: {}, AAE: {}\n", are, aae);
                 }
             }
         }
     }
 
     // Add timestamp to output filename
-    auto now = std::chrono::system_clock::now();
-    auto time_t_now = std::chrono::system_clock::to_time_t(now);
-    std::tm tm_now;
-    localtime_r(&time_t_now, &tm_now);
 
-    std::ostringstream timestamp_stream;
-    timestamp_stream << std::put_time(&tm_now, "%Y%m%d_%H%M%S");
-    string timestamp = timestamp_stream.str();
+    auto now = chrono::system_clock::now();
+    string timestamp = format("{:%Y%m%d_%H%M%S}", chrono::round<chrono::seconds>(now));
 
     // Insert timestamp before file extension
     string output_file = config.output_file;
