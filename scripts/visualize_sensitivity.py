@@ -157,6 +157,82 @@ def plot_results(aggregated, output_path, show_within_variance=False):
     save_figure(fig, output_path)
 
 
+def print_summary_table(agg):
+    names = list(agg.keys())
+
+    thr = [(name, agg[name]['throughput_mean']) for name in names]
+    are = [(name, agg[name]['are_mean']) for name in names]
+    aae = [(name, agg[name]['aae_mean']) for name in names]
+
+    has_within_var = any(agg[name]['are_within_var_mean'] > 0 for name in names)
+
+    are_var = [(name, agg[name]['are_within_var_mean']) for name in names] if has_within_var else []
+    aae_var = [(name, agg[name]['aae_within_var_mean']) for name in names] if has_within_var else []
+
+    thr_sorted = sorted(thr, key=lambda x: x[1], reverse=True)
+    are_sorted = sorted(are, key=lambda x: x[1])
+    aae_sorted = sorted(aae, key=lambda x: x[1])
+
+    thr_best = thr_sorted[0][0] if thr_sorted else None
+    thr_second = thr_sorted[1][0] if len(thr_sorted) > 1 else None
+    are_best = are_sorted[0][0] if are_sorted else None
+    are_second = are_sorted[1][0] if len(are_sorted) > 1 else None
+    aae_best = aae_sorted[0][0] if aae_sorted else None
+    aae_second = aae_sorted[1][0] if len(aae_sorted) > 1 else None
+
+    if has_within_var:
+        are_var_sorted = sorted(are_var, key=lambda x: x[1])
+        aae_var_sorted = sorted(aae_var, key=lambda x: x[1])
+        are_var_best = are_var_sorted[0][0] if are_var_sorted else None
+        are_var_second = are_var_sorted[1][0] if len(are_var_sorted) > 1 else None
+        aae_var_best = aae_var_sorted[0][0] if aae_var_sorted else None
+        aae_var_second = aae_var_sorted[1][0] if len(aae_var_sorted) > 1 else None
+
+    print('\nSummary Table:')
+    if has_within_var:
+        hdr = '{:30s} {:>12s} {:>12s} {:>12s} {:>12s} {:>14s} {:>14s}'.format(
+            'Config', 'Throughput', 'QueryThroughput', 'ARE', 'AAE', 'ARE_var', 'AAE_var')
+    else:
+        hdr = '{:30s} {:>12s} {:>12s} {:>12s} {:>10s}'.format('Config', 'Throughput', 'QueryThroughput', 'ARE', 'AAE')
+    print(hdr)
+    print('-' * len(hdr))
+
+    for name in names:
+        row_thr = agg[name]['throughput_mean']
+        row_q = agg[name]['query_throughput_mean']
+        row_are = agg[name]['are_mean']
+        row_aae = agg[name]['aae_mean']
+
+        thr_mark = ''
+        are_mark = ''
+        aae_mark = ''
+        if name == thr_best: thr_mark = '*'
+        elif name == thr_second: thr_mark = '**'
+        if name == are_best: are_mark = '*'
+        elif name == are_second: are_mark = '**'
+        if name == aae_best: aae_mark = '*'
+        elif name == aae_second: aae_mark = '**'
+
+        if has_within_var:
+            row_are_var = agg[name]['are_within_var_mean']
+            row_aae_var = agg[name]['aae_within_var_mean']
+            are_var_mark = ''
+            aae_var_mark = ''
+            if name == are_var_best: are_var_mark = '*'
+            elif name == are_var_second: are_var_mark = '**'
+            if name == aae_var_best: aae_var_mark = '*'
+            elif name == aae_var_second: aae_var_mark = '**'
+
+            print('{:30s} {:12.3f}{:<2s} {:12.3f} {:12.6f}{:<2s} {:12.6f}{:<2s} {:14.6f}{:<2s} {:14.6f}{:<2s}'.format(
+                name, row_thr, thr_mark, row_q, row_are, are_mark, row_aae, aae_mark,
+                row_are_var, are_var_mark, row_aae_var, aae_var_mark
+            ))
+        else:
+            print('{:30s} {:12.3f}{} {:12.3f} {:12.6f}{} {:10.6f}{}'.format(
+                name, row_thr, thr_mark, row_q, row_are, are_mark, row_aae, aae_mark
+            ))
+
+
 def main():
     parser = argparse.ArgumentParser(description='Visualize sensitivity analysis results')
     parser.add_argument('-i', '--input', type=str, required=True,
@@ -202,81 +278,6 @@ def main():
 
     print("\nAggregating results across repetitions...")
     aggregated = aggregate_results(results)
-
-    def print_summary_table(agg):
-        names = list(agg.keys())
-
-        thr = [(name, agg[name]['throughput_mean']) for name in names]
-        are = [(name, agg[name]['are_mean']) for name in names]
-        aae = [(name, agg[name]['aae_mean']) for name in names]
-
-        has_within_var = any(agg[name]['are_within_var_mean'] > 0 for name in names)
-
-        are_var = [(name, agg[name]['are_within_var_mean']) for name in names] if has_within_var else []
-        aae_var = [(name, agg[name]['aae_within_var_mean']) for name in names] if has_within_var else []
-
-        thr_sorted = sorted(thr, key=lambda x: x[1], reverse=True)
-        are_sorted = sorted(are, key=lambda x: x[1])
-        aae_sorted = sorted(aae, key=lambda x: x[1])
-
-        thr_best = thr_sorted[0][0] if thr_sorted else None
-        thr_second = thr_sorted[1][0] if len(thr_sorted) > 1 else None
-        are_best = are_sorted[0][0] if are_sorted else None
-        are_second = are_sorted[1][0] if len(are_sorted) > 1 else None
-        aae_best = aae_sorted[0][0] if aae_sorted else None
-        aae_second = aae_sorted[1][0] if len(aae_sorted) > 1 else None
-
-        if has_within_var:
-            are_var_sorted = sorted(are_var, key=lambda x: x[1])
-            aae_var_sorted = sorted(aae_var, key=lambda x: x[1])
-            are_var_best = are_var_sorted[0][0] if are_var_sorted else None
-            are_var_second = are_var_sorted[1][0] if len(are_var_sorted) > 1 else None
-            aae_var_best = aae_var_sorted[0][0] if aae_var_sorted else None
-            aae_var_second = aae_var_sorted[1][0] if len(aae_var_sorted) > 1 else None
-
-        print('\nSummary Table:')
-        if has_within_var:
-            hdr = '{:30s} {:>12s} {:>12s} {:>12s} {:>12s} {:>14s} {:>14s}'.format(
-                'Config', 'Throughput', 'QueryThroughput', 'ARE', 'AAE', 'ARE_var', 'AAE_var')
-        else:
-            hdr = '{:30s} {:>12s} {:>12s} {:>12s} {:>10s}'.format('Config', 'Throughput', 'QueryThroughput', 'ARE', 'AAE')
-        print(hdr)
-        print('-' * len(hdr))
-
-        for name in names:
-            row_thr = agg[name]['throughput_mean']
-            row_q = agg[name]['query_throughput_mean']
-            row_are = agg[name]['are_mean']
-            row_aae = agg[name]['aae_mean']
-
-            thr_mark = ''
-            are_mark = ''
-            aae_mark = ''
-            if name == thr_best: thr_mark = '*'
-            elif name == thr_second: thr_mark = '**'
-            if name == are_best: are_mark = '*'
-            elif name == are_second: are_mark = '**'
-            if name == aae_best: aae_mark = '*'
-            elif name == aae_second: aae_mark = '**'
-
-            if has_within_var:
-                row_are_var = agg[name]['are_within_var_mean']
-                row_aae_var = agg[name]['aae_within_var_mean']
-                are_var_mark = ''
-                aae_var_mark = ''
-                if name == are_var_best: are_var_mark = '*'
-                elif name == are_var_second: are_var_mark = '**'
-                if name == aae_var_best: aae_var_mark = '*'
-                elif name == aae_var_second: aae_var_mark = '**'
-
-                print('{:30s} {:12.3f}{:<2s} {:12.3f} {:12.6f}{:<2s} {:12.6f}{:<2s} {:14.6f}{:<2s} {:14.6f}{:<2s}'.format(
-                    name, row_thr, thr_mark, row_q, row_are, are_mark, row_aae, aae_mark,
-                    row_are_var, are_var_mark, row_aae_var, aae_var_mark
-                ))
-            else:
-                print('{:30s} {:12.3f}{} {:12.3f} {:12.6f}{} {:10.6f}{}'.format(
-                    name, row_thr, thr_mark, row_q, row_are, are_mark, row_aae, aae_mark
-                ))
 
     print_summary_table(aggregated)
 
