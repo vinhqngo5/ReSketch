@@ -77,6 +77,7 @@ def plot_results(aggregated, output_path, show_within_variance=False):
     depth_styles = get_resketch_depth_styles(material_colors)
 
     cm_data = aggregated.get('CountMin', None)
+    cm_data = None
 
     plot_data = defaultdict(lambda: defaultdict(dict))
     for config_name, data in aggregated.items():
@@ -87,11 +88,14 @@ def plot_results(aggregated, output_path, show_within_variance=False):
             plot_data[memory_budget][depth][k] = data
 
     memory_budgets = sorted(plot_data.keys())
-    depths = sorted(plot_data[memory_budgets[0]])
+
+    # Remove certain depths from plots
+    unwanted_depths = (1, 2)
+    depths = sorted(d for d in plot_data[memory_budgets[0]] if d not in unwanted_depths)
     # depths = [1, 3, 5, 7]
     # depths = [1, 2, 3, 4, 5, 6, 7, 8]
     # depths = [3, 4, 5, 6, 7, 8]
-    cm_data = None
+
     k_values = sorted(plot_data[memory_budgets[0]][depths[0]])
 
     print(f"Found depths: {depths}")
