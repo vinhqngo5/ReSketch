@@ -49,9 +49,9 @@ struct SensitivityConfig {
     // Memory budgets to test for all sketches
     vector<uint32_t> memory_budgets_kb = {32, 64, 256, 1024};
     // k values to test for ReSketch
-    vector<uint32_t> k_values = {10, 90};
+    vector<uint32_t> k_values = {10, 30, 50, 70, 90};
     // depth values to test for ReSketch
-    vector<uint32_t> depth_values = {1, 8};
+    vector<uint32_t> depth_values = {1, 2, 3, 4, 5, 6, 7, 8};
 
     static void add_params_to_config_parser(SensitivityConfig &config, ConfigParser &parser) {
         parser.AddParameter(new UnsignedInt32Parameter("app.repetitions", to_string(config.repetitions), &config.repetitions, false, "Number of experiment repetitions"));
