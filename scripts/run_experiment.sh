@@ -5,7 +5,7 @@ run_and_viz() {
     local extra_args="$@"
     
     echo ""
-    echo "Running ${exp_name}..."
+    echo "Running ${exp_name} (${OUTPUT_DIR})..."
     mkdir -p "$OUTPUT_DIR"
     build/release/bin/release/$exp_name $extra_args --app.repetitions 1 > "$OUTPUT_DIR/${exp_name}.txt" 2>&1
     
