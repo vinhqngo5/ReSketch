@@ -1,24 +1,28 @@
 #pragma once
 
+#include "quantile_summary_config.hpp"
+
+#include "frequency_summary/frequency_summary.hpp"
+#include "quantile_summary.hpp"
+
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <random>
 #include <stdexcept>
 #include <vector>
 
-#include "frequency_summary/frequency_summary.hpp"
-#include "quantile_summary.hpp"
-#include "quantile_summary_config.hpp"
-
-class KLLXX : public QuantileSummary, public FrequencySummary {
-  public:
+class KLLXX : public QuantileSummary, public FrequencySummary
+{
+public:
     explicit KLLXX(const KLLConfig &config) : m_config(config), m_n(0), m_c(2.0 / 3.0), m_rng(std::random_device{}()), m_dist(0.5) { m_compactors.emplace_back(); }
 
     KLLXX() : m_n(0), m_c(2.0 / 3.0), m_rng(std::random_device{}()), m_dist(0.5) { m_config.k = 0; }
 
     // Copy constructor and assignment
     KLLXX(const KLLXX &other) : m_config(other.m_config), m_n(other.m_n), m_c(other.m_c), m_compactors(other.m_compactors), m_rng(std::random_device{}()), m_dist(other.m_dist) {}
-    KLLXX &operator=(const KLLXX &other) {
+    KLLXX &operator=(const KLLXX &other)
+    {
         if (this == &other) return *this;
         m_config = other.m_config;
         m_n = other.m_n;
@@ -29,8 +33,10 @@ class KLLXX : public QuantileSummary, public FrequencySummary {
 
     // Move constructor and assignment
     KLLXX(KLLXX &&other) noexcept = default;
-    KLLXX &operator=(KLLXX &&other) noexcept {
-        if (this != &other) {
+    KLLXX &operator=(KLLXX &&other) noexcept
+    {
+        if (this != &other)
+        {
             m_config = std::move(other.m_config);
             m_n = std::move(other.m_n);
             m_compactors = std::move(other.m_compactors);
@@ -40,46 +46,60 @@ class KLLXX : public QuantileSummary, public FrequencySummary {
         return *this;
     }
 
-    void update(uint64_t item) override {
+    void update(uint64_t item) override
+    {
         m_compactors[0].push_back(item);
         m_n++;
         if (m_compactors[0].size() >= _get_level_capacity(0)) { _compress(0); }
     }
 
-    void merge(const QuantileSummary &other) override {
+    void merge(const QuantileSummary &other) override
+    {
         const auto *other_kll = dynamic_cast<const KLLXX *>(&other);
         if (!other_kll) { throw std::invalid_argument("Can only merge KLLXX with another KLLXX."); }
         merge(*other_kll);
     }
 
-    void merge(const KLLXX &other_kll) {
+    void merge(const KLLXX &other_kll)
+    {
         if (m_config.k != other_kll.m_config.k) { throw std::invalid_argument("KLLXX sketches must have the same k parameter to be merged."); }
         m_n += other_kll.m_n;
         uint32_t max_level = std::max(m_compactors.size(), other_kll.m_compactors.size());
         if (m_compactors.size() < max_level) m_compactors.resize(max_level);
 
-        for (uint32_t i = 0; i < other_kll.m_compactors.size(); ++i) {
+        for (uint32_t i = 0; i < other_kll.m_compactors.size(); ++i)
+        {
             m_compactors[i].insert(m_compactors[i].end(), other_kll.m_compactors[i].begin(), other_kll.m_compactors[i].end());
         }
 
-        for (uint32_t i = 0; i < m_compactors.size(); ++i) {
+        for (uint32_t i = 0; i < m_compactors.size(); ++i)
+        {
             if (m_compactors[i].size() >= _get_level_capacity(i)) { _compress(i); }
         }
     }
 
-    double get_rank(uint64_t value) const override {
+    double get_rank(uint64_t value) const override
+    {
         double rank = 0.0;
-        for (uint32_t i = 0; i < m_compactors.size(); ++i) {
+        for (uint32_t i = 0; i < m_compactors.size(); ++i)
+        {
             uint64_t weight = 1ULL << i;
-            uint64_t count_le = std::count_if(m_compactors[i].begin(), m_compactors[i].end(), [value](uint64_t item) { return item <= value; });
+            uint64_t count_le = std::count_if(
+                m_compactors[i].begin(), m_compactors[i].end(),
+                [value](uint64_t item)
+                {
+                    return item <= value;
+                });
             rank += static_cast<double>(count_le) * weight;
         }
         return rank;
     }
 
-    double estimate(uint64_t item) const override {
+    double estimate(uint64_t item) const override
+    {
         double estimated_count = 0.0;
-        for (uint32_t i = 0; i < m_compactors.size(); ++i) {
+        for (uint32_t i = 0; i < m_compactors.size(); ++i)
+        {
             uint64_t weight = 1ULL << i;
             uint64_t count_eq = std::count(m_compactors[i].begin(), m_compactors[i].end(), item);
             estimated_count += static_cast<double>(count_eq) * weight;
@@ -89,24 +109,35 @@ class KLLXX : public QuantileSummary, public FrequencySummary {
 
     const KLLConfig &get_config() const { return m_config; }
 
-    double get_count_in_range(uint64_t start_h, uint64_t end_h) const {
+    double get_count_in_range(uint64_t start_h, uint64_t end_h) const
+    {
         double estimated_count = 0.0;
-        for (uint32_t i = 0; i < m_compactors.size(); ++i) {
+        for (uint32_t i = 0; i < m_compactors.size(); ++i)
+        {
             uint64_t weight = 1ULL << i;
-            uint64_t count_in_range = std::count_if(m_compactors[i].begin(), m_compactors[i].end(), [start_h, end_h](uint64_t h) { return h > start_h && h <= end_h; });
+            uint64_t count_in_range = std::count_if(
+                m_compactors[i].begin(), m_compactors[i].end(),
+                [start_h, end_h](uint64_t h)
+                {
+                    return h > start_h && h <= end_h;
+                });
             estimated_count += static_cast<double>(count_in_range) * weight;
         }
         return estimated_count;
     }
 
-    KLLXX rebuild(uint64_t start_h, uint64_t end_h) const {
+    KLLXX rebuild(uint64_t start_h, uint64_t end_h) const
+    {
         KLLXX new_sketch(m_config);
         if (!m_compactors.empty()) new_sketch.m_compactors.resize(m_compactors.size());
 
-        for (uint32_t i = 0; i < m_compactors.size(); ++i) {
+        for (uint32_t i = 0; i < m_compactors.size(); ++i)
+        {
             uint64_t weight = 1ULL << i;
-            for (const auto &item : m_compactors[i]) {
-                if (item > start_h && item <= end_h) {
+            for (const auto &item : m_compactors[i])
+            {
+                if (item > start_h && item <= end_h)
+                {
                     new_sketch.m_compactors[i].push_back(item);
                     new_sketch.m_n += weight;
                 }
@@ -116,8 +147,10 @@ class KLLXX : public QuantileSummary, public FrequencySummary {
     }
 
     // Iterate over all summarized items (used for Split())
-    void for_each_summarized_item(const std::function<void(uint64_t item, uint64_t weight)> &func) const {
-        for (uint32_t i = 0; i < m_compactors.size(); ++i) {
+    void for_each_summarized_item(const std::function<void(uint64_t item, uint64_t weight)> &func) const
+    {
+        for (uint32_t i = 0; i < m_compactors.size(); ++i)
+        {
             if (m_compactors[i].empty()) continue;
 
             uint64_t weight = 1ULL << i;
@@ -126,10 +159,12 @@ class KLLXX : public QuantileSummary, public FrequencySummary {
     }
 
     // Construct KLL from weighted items without compression
-    static KLLXX construct_from_weighted_items(const std::vector<std::pair<uint64_t, uint64_t>> &weighted_items, const KLLConfig &config) {
+    static KLLXX construct_from_weighted_items(const std::vector<std::pair<uint64_t, uint64_t>> &weighted_items, const KLLConfig &config)
+    {
         KLLXX sketch(config);
 
-        for (size_t i = 0; i < weighted_items.size(); ++i) {
+        for (size_t i = 0; i < weighted_items.size(); ++i)
+        {
             bool is_last = (i == weighted_items.size() - 1);
             sketch.update(weighted_items[i].first, weighted_items[i].second, is_last);   // compress only on last item
             // sketch.update(weighted_items[i].first, weighted_items[i].second, false);
@@ -140,13 +175,16 @@ class KLLXX : public QuantileSummary, public FrequencySummary {
 
     // Update the sketch with a new item and its weight -> Need to double check the correctness later but it should be correct
     // compress = False is used in Resketch::Split() to avoid repeated compressions
-    void update(uint64_t item, uint64_t weight, bool compress = true) {
+    void update(uint64_t item, uint64_t weight, bool compress = true)
+    {
         if (weight == 0) return;
 
         m_n += weight;
         uint32_t level = 0;
-        while (weight > 0) {
-            if (weight & 1) {
+        while (weight > 0)
+        {
+            if (weight & 1)
+            {
                 if (level >= m_compactors.size()) { m_compactors.resize(level + 1); }
                 m_compactors[level].push_back(item);
             }
@@ -156,14 +194,17 @@ class KLLXX : public QuantileSummary, public FrequencySummary {
 
         // After adding, check all levels for potential compressions
         // Need to compress multiple levels since the first level might not be overflowed but higher levels might be
-        if (compress) {
-            for (uint32_t i = 0; i < m_compactors.size(); ++i) {
+        if (compress)
+        {
+            for (uint32_t i = 0; i < m_compactors.size(); ++i)
+            {
                 if (m_compactors[i].size() >= _get_level_capacity(i)) { _compress(i); }
             }
         }
     }
 
-    uint32_t get_max_memory_usage() const {
+    uint32_t get_max_memory_usage() const
+    {
         // The total number of items stored across all compactors is bounded by ~3*k.
         // This comes from the sum of the geometric series of capacities: k / (1 - c).
         // For c = 2/3, this is k / (1/3) = 3k.
@@ -173,7 +214,8 @@ class KLLXX : public QuantileSummary, public FrequencySummary {
         return max_stored_items * sizeof(uint32_t);   // Assuming each item is stored as a 32-bit integer without changing all the types
     }
 
-    static uint32_t calculate_max_k(uint32_t total_memory_bytes, double c = 2.0 / 3.0) {
+    static uint32_t calculate_max_k(uint32_t total_memory_bytes, double c = 2.0 / 3.0)
+    {
         const uint32_t item_size = sizeof(uint32_t);
         if (total_memory_bytes < item_size || (1.0 - c) <= 0) { return 0; }
 
@@ -183,19 +225,22 @@ class KLLXX : public QuantileSummary, public FrequencySummary {
         return static_cast<uint32_t>(std::floor(k));
     }
 
-    friend std::ostream &operator<<(std::ostream &os, const KLLXX &kll) {
+    friend std::ostream &operator<<(std::ostream &os, const KLLXX &kll)
+    {
         os << "KLLXX Sketch:" << std::endl;
         os << "  k: " << kll.m_config.k << std::endl;
         os << "  count: " << kll.m_n << std::endl;
         os << "  levels: " << kll.m_compactors.size() << std::endl;
 
-        for (uint32_t i = 0; i < kll.m_compactors.size(); ++i) {
+        for (uint32_t i = 0; i < kll.m_compactors.size(); ++i)
+        {
             os << "  Level " << i << ":" << std::endl;
             os << "    capacity: " << kll._get_level_capacity(i) << std::endl;
             os << "    size: " << kll.m_compactors[i].size() << std::endl;
 
             // Print items (limited to first few if there are many)
-            if (!kll.m_compactors[i].empty()) {
+            if (!kll.m_compactors[i].empty())
+            {
                 os << "    items: ";
                 const uint32_t max_items_to_show = 10;
                 for (uint32_t j = 0; j < std::min<std::uint32_t>(kll.m_compactors[i].size(), max_items_to_show); ++j) { os << kll.m_compactors[i][j] << " "; }
@@ -211,13 +256,15 @@ class KLLXX : public QuantileSummary, public FrequencySummary {
                               // calculate time taken for compression
     double total_compress_time = 0.0;
 
-  private:
-    uint32_t _get_level_capacity(uint32_t level) const {
+private:
+    uint32_t _get_level_capacity(uint32_t level) const
+    {
         if (m_config.k == 0) return std::numeric_limits<uint32_t>::max();
         return static_cast<uint32_t>(std::ceil(m_config.k * std::pow(m_c, static_cast<double>(m_compactors.size() - level - 1))));
     }
 
-    void _compress_old(uint32_t level) {
+    void _compress_old(uint32_t level)
+    {
         count_compress++;
         auto start_time = std::chrono::high_resolution_clock::now();
         if (level >= m_compactors.size() || m_compactors[level].size() < _get_level_capacity(level)) { return; }
@@ -227,7 +274,8 @@ class KLLXX : public QuantileSummary, public FrequencySummary {
         std::vector<uint64_t> keepers;
         keepers.reserve(m_compactors[level].size() / 2 + 1);
 
-        for (const auto &item : m_compactors[level]) {
+        for (const auto &item : m_compactors[level])
+        {
             if (m_dist(m_rng)) { keepers.push_back(item); }
         }
 
@@ -242,7 +290,8 @@ class KLLXX : public QuantileSummary, public FrequencySummary {
         if (m_compactors[level + 1].size() >= _get_level_capacity(level + 1)) { _compress(level + 1); }
     }
 
-    void _compress(uint32_t level) {
+    void _compress(uint32_t level)
+    {
         count_compress++;
         auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -260,7 +309,8 @@ class KLLXX : public QuantileSummary, public FrequencySummary {
 
         // inplace compacting
         uint32_t keeper_count = 0;
-        for (uint32_t i = rand_offset; i < source_compactor.size(); i += 2) {
+        for (uint32_t i = rand_offset; i < source_compactor.size(); i += 2)
+        {
             if (i != keeper_count) { source_compactor[keeper_count] = source_compactor[i]; }
             keeper_count++;
         }

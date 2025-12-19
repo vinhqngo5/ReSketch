@@ -1,5 +1,11 @@
-#define DOCTEST_CONFIG_IMPLEMENT
-#include "doctest.h"
+#include "frequency_summary/frequency_summary_config.hpp"
+
+#include "frequency_summary/resketchv2.hpp"
+#include "common.hpp"
+
+#include "utils/ConfigParser.hpp"
+
+#include <json/json.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -9,33 +15,18 @@
 #include <iostream>
 #include <map>
 #include <memory>
-#include <numeric>
 #include <random>
 #include <sstream>
 #include <string>
 #include <sys/stat.h>
 #include <vector>
 
-// JSON Library
-#include "json/json.hpp"
-
-// Utils
-#include "utils/ConfigParser.hpp"
-
-// Sketch Headers
-#include "frequency_summary/resketchv2.hpp"
-
-// Config Headers
-#include "frequency_summary/frequency_summary_config.hpp"
-
-// Common utilities
-#include "common.hpp"
-
 using namespace std;
 using json = nlohmann::json;
 
 // Split Experiment Config
-struct SplitConfig {
+struct SplitConfig
+{
     uint32_t memory_budget_kb = 32;
     uint32_t repetitions = 10;
     string dataset_type = "zipf";
@@ -45,7 +36,8 @@ struct SplitConfig {
     float zipf_param = 1.1;
     string output_file = "output/split_results.json";
 
-    static void add_params_to_config_parser(SplitConfig &config, ConfigParser &parser) {
+    static void add_params_to_config_parser(SplitConfig &config, ConfigParser &parser)
+    {
         parser.AddParameter(new UnsignedInt32Parameter("app.memory_budget_kb", "32", &config.memory_budget_kb, false, "Memory budget in KB per sketch"));
         parser.AddParameter(new UnsignedInt32Parameter("app.repetitions", "10", &config.repetitions, false, "Number of experiment repetitions"));
         parser.AddParameter(new StringParameter("app.dataset_type", "zipf", &config.dataset_type, false, "Dataset type: zipf or caida"));
@@ -56,7 +48,8 @@ struct SplitConfig {
         parser.AddParameter(new StringParameter("app.output_file", "output/split_results.json", &config.output_file, false, "Output JSON file"));
     }
 
-    friend ostream &operator<<(ostream &os, const SplitConfig &config) {
+    friend ostream &operator<<(ostream &os, const SplitConfig &config)
+    {
         os << "\n=== Split Experiment Configuration ===" << endl;
         os << "Memory Budget: " << config.memory_budget_kb << " KB" << endl;
         os << "Repetitions: " << config.repetitions << endl;
@@ -71,19 +64,22 @@ struct SplitConfig {
 };
 
 // Result structure
-struct AccuracyMetrics {
+struct AccuracyMetrics
+{
     double are = 0.0;
     double aae = 0.0;
     double are_variance = 0.0;
     double aae_variance = 0.0;
 };
 
-struct SketchMetrics {
+struct SketchMetrics
+{
     double process_time_s = 0.0;
     uint32_t memory_bytes = 0;
 };
 
-struct SplitResult {
+struct SplitResult
+{
     // Sketch metrics
     SketchMetrics sketch_c_full;
     SketchMetrics sketch_a_direct;
@@ -98,7 +94,8 @@ struct SplitResult {
     AccuracyMetrics c_vs_true_on_all;        // C (full) vs true frequencies on All
 };
 
-void export_to_json(const string &filename, const SplitConfig &app_config, const ReSketchConfig &rs_config, const vector<SplitResult> &results) {
+void export_to_json(const string &filename, const SplitConfig &app_config, const ReSketchConfig &rs_config, const vector<SplitResult> &results)
+{
     create_directory(filename);
 
     // Build JSON object
@@ -123,44 +120,47 @@ void export_to_json(const string &filename, const SplitConfig &app_config, const
 
     // Results section
     j["results"] = json::array();
-    for (uint32_t rep = 0; rep < results.size(); ++rep) {
+    for (uint32_t rep = 0; rep < results.size(); ++rep)
+    {
         const auto &result = results[rep];
-        json rep_json = {{"repetition_id", rep},
-                         {"sketch_c_full", {{"memory_bytes", result.sketch_c_full.memory_bytes}, {"process_time_s", result.sketch_c_full.process_time_s}}},
-                         {"sketch_a_direct", {{"memory_bytes", result.sketch_a_direct.memory_bytes}, {"process_time_s", result.sketch_a_direct.process_time_s}}},
-                         {"sketch_b_direct", {{"memory_bytes", result.sketch_b_direct.memory_bytes}, {"process_time_s", result.sketch_b_direct.process_time_s}}},
-                         {"split_time_s", result.split_time_s},
-                         {"a_prime_vs_true_on_da",
-                          {{"are", result.a_prime_vs_true_on_da.are},
-                           {"aae", result.a_prime_vs_true_on_da.aae},
-                           {"are_variance", result.a_prime_vs_true_on_da.are_variance},
-                           {"aae_variance", result.a_prime_vs_true_on_da.aae_variance}}},
-                         {"b_prime_vs_true_on_db",
-                          {{"are", result.b_prime_vs_true_on_db.are},
-                           {"aae", result.b_prime_vs_true_on_db.aae},
-                           {"are_variance", result.b_prime_vs_true_on_db.are_variance},
-                           {"aae_variance", result.b_prime_vs_true_on_db.aae_variance}}},
-                         {"a_vs_true_on_da",
-                          {{"are", result.a_vs_true_on_da.are},
-                           {"aae", result.a_vs_true_on_da.aae},
-                           {"are_variance", result.a_vs_true_on_da.are_variance},
-                           {"aae_variance", result.a_vs_true_on_da.aae_variance}}},
-                         {"b_vs_true_on_db",
-                          {{"are", result.b_vs_true_on_db.are},
-                           {"aae", result.b_vs_true_on_db.aae},
-                           {"are_variance", result.b_vs_true_on_db.are_variance},
-                           {"aae_variance", result.b_vs_true_on_db.aae_variance}}},
-                         {"c_vs_true_on_all",
-                          {{"are", result.c_vs_true_on_all.are},
-                           {"aae", result.c_vs_true_on_all.aae},
-                           {"are_variance", result.c_vs_true_on_all.are_variance},
-                           {"aae_variance", result.c_vs_true_on_all.aae_variance}}}};
+        json rep_json = {
+            {"repetition_id", rep},
+            {"sketch_c_full", {{"memory_bytes", result.sketch_c_full.memory_bytes}, {"process_time_s", result.sketch_c_full.process_time_s}}},
+            {"sketch_a_direct", {{"memory_bytes", result.sketch_a_direct.memory_bytes}, {"process_time_s", result.sketch_a_direct.process_time_s}}},
+            {"sketch_b_direct", {{"memory_bytes", result.sketch_b_direct.memory_bytes}, {"process_time_s", result.sketch_b_direct.process_time_s}}},
+            {"split_time_s", result.split_time_s},
+            {"a_prime_vs_true_on_da",
+             {{"are", result.a_prime_vs_true_on_da.are},
+              {"aae", result.a_prime_vs_true_on_da.aae},
+              {"are_variance", result.a_prime_vs_true_on_da.are_variance},
+              {"aae_variance", result.a_prime_vs_true_on_da.aae_variance}}},
+            {"b_prime_vs_true_on_db",
+             {{"are", result.b_prime_vs_true_on_db.are},
+              {"aae", result.b_prime_vs_true_on_db.aae},
+              {"are_variance", result.b_prime_vs_true_on_db.are_variance},
+              {"aae_variance", result.b_prime_vs_true_on_db.aae_variance}}},
+            {"a_vs_true_on_da",
+             {{"are", result.a_vs_true_on_da.are},
+              {"aae", result.a_vs_true_on_da.aae},
+              {"are_variance", result.a_vs_true_on_da.are_variance},
+              {"aae_variance", result.a_vs_true_on_da.aae_variance}}},
+            {"b_vs_true_on_db",
+             {{"are", result.b_vs_true_on_db.are},
+              {"aae", result.b_vs_true_on_db.aae},
+              {"are_variance", result.b_vs_true_on_db.are_variance},
+              {"aae_variance", result.b_vs_true_on_db.aae_variance}}},
+            {"c_vs_true_on_all",
+             {{"are", result.c_vs_true_on_all.are},
+              {"aae", result.c_vs_true_on_all.aae},
+              {"are_variance", result.c_vs_true_on_all.are_variance},
+              {"aae_variance", result.c_vs_true_on_all.aae_variance}}}};
         j["results"].push_back(rep_json);
     }
 
     // Write to file
     ofstream out(filename);
-    if (!out.is_open()) {
+    if (!out.is_open())
+    {
         cerr << "Error: Cannot open output file: " << filename << endl;
         return;
     }
@@ -171,7 +171,8 @@ void export_to_json(const string &filename, const SplitConfig &app_config, const
     cout << "\nResults exported to: " << filename << endl;
 }
 
-void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_config) {
+void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_config)
+{
     cout << config << endl;
     cout << rs_config << endl;
 
@@ -184,7 +185,8 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
     cout << "\n=== Calculated Width ===" << endl;
     cout << "Width per sketch: " << width << endl;
 
-    for (uint32_t rep = 0; rep < config.repetitions; ++rep) {
+    for (uint32_t rep = 0; rep < config.repetitions; ++rep)
+    {
         cout << "\n========================================" << endl;
         cout << "Repetition " << (rep + 1) << "/" << config.repetitions << endl;
         cout << "========================================" << endl;
@@ -205,17 +207,23 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
 
         // Generate full dataset first
         vector<uint64_t> full_data;
-        if (config.dataset_type == "zipf") {
+        if (config.dataset_type == "zipf")
+        {
             cout << "Generating Zipf data..." << endl;
             full_data = generate_zipf_data(config.stream_size, config.stream_diversity, config.zipf_param);
-        } else if (config.dataset_type == "caida") {
+        }
+        else if (config.dataset_type == "caida")
+        {
             cout << "Reading CAIDA data..." << endl;
             full_data = read_caida_data(config.caida_path, config.stream_size);
-            if (full_data.empty()) {
+            if (full_data.empty())
+            {
                 cerr << "Error: Failed to read CAIDA data. Skipping repetition." << endl;
                 continue;
             }
-        } else {
+        }
+        else
+        {
             cerr << "Error: Unknown dataset type: " << config.dataset_type << ". Skipping repetition." << endl;
             continue;
         }
@@ -225,11 +233,12 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         data_A.reserve(full_data.size() / 2);
         data_B.reserve(full_data.size() / 2);
 
-        for (const auto &item : full_data) {
+        for (const auto &item : full_data)
+        {
             uint64_t partition_hash = ReSketchV2::compute_partition_hash(item, shared_partition_seed);
-            if (partition_hash < split_point) {
-                data_A.push_back(item);
-            } else {
+            if (partition_hash < split_point) { data_A.push_back(item); }
+            else
+            {
                 data_B.push_back(item);
             }
         }
@@ -240,11 +249,13 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
 
         // Calculate true frequencies for each dataset
         map<uint64_t, uint64_t> true_freqs_A, true_freqs_B, true_freqs_all;
-        for (const auto &item : data_A) {
+        for (const auto &item : data_A)
+        {
             true_freqs_A[item]++;
             true_freqs_all[item]++;
         }
-        for (const auto &item : data_B) {
+        for (const auto &item : data_B)
+        {
             true_freqs_B[item]++;
             true_freqs_all[item]++;
         }
@@ -305,9 +316,11 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         vector<double> a_prime_rel_errors, a_prime_abs_errors;
         vector<double> b_prime_rel_errors, b_prime_abs_errors;
 
-        for (const auto &[item, true_freq] : true_freqs_all) {
+        for (const auto &[item, true_freq] : true_freqs_all)
+        {
             double est_freq;
-            if (sketch_A_prime.is_responsible_for(item)) {
+            if (sketch_A_prime.is_responsible_for(item))
+            {
                 // Item belongs to A' partition
                 est_freq = sketch_A_prime.estimate(item);
                 double rel_error = (true_freq > 0) ? (std::abs(est_freq - true_freq) / true_freq) : 0.0;
@@ -317,7 +330,9 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
                 a_prime_rel_errors.push_back(rel_error);
                 a_prime_abs_errors.push_back(abs_error);
                 count_a_prime++;
-            } else {
+            }
+            else
+            {
                 // Item belongs to B' partition
                 est_freq = sketch_B_prime.estimate(item);
                 double rel_error = (true_freq > 0) ? (std::abs(est_freq - true_freq) / true_freq) : 0.0;
@@ -334,12 +349,14 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         result.a_prime_vs_true_on_da.aae = count_a_prime > 0 ? total_abs_error_a_prime / count_a_prime : 0.0;
 
         // Calculate variance for A'
-        if (!a_prime_rel_errors.empty()) {
+        if (!a_prime_rel_errors.empty())
+        {
             double sum_sq = 0.0;
             for (double v : a_prime_rel_errors) sum_sq += (v - result.a_prime_vs_true_on_da.are) * (v - result.a_prime_vs_true_on_da.are);
             result.a_prime_vs_true_on_da.are_variance = sum_sq / a_prime_rel_errors.size();
         }
-        if (!a_prime_abs_errors.empty()) {
+        if (!a_prime_abs_errors.empty())
+        {
             double sum_sq = 0.0;
             for (double v : a_prime_abs_errors) sum_sq += (v - result.a_prime_vs_true_on_da.aae) * (v - result.a_prime_vs_true_on_da.aae);
             result.a_prime_vs_true_on_da.aae_variance = sum_sq / a_prime_abs_errors.size();
@@ -351,12 +368,14 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         result.b_prime_vs_true_on_db.aae = count_b_prime > 0 ? total_abs_error_b_prime / count_b_prime : 0.0;
 
         // Calculate variance for B'
-        if (!b_prime_rel_errors.empty()) {
+        if (!b_prime_rel_errors.empty())
+        {
             double sum_sq = 0.0;
             for (double v : b_prime_rel_errors) sum_sq += (v - result.b_prime_vs_true_on_db.are) * (v - result.b_prime_vs_true_on_db.are);
             result.b_prime_vs_true_on_db.are_variance = sum_sq / b_prime_rel_errors.size();
         }
-        if (!b_prime_abs_errors.empty()) {
+        if (!b_prime_abs_errors.empty())
+        {
             double sum_sq = 0.0;
             for (double v : b_prime_abs_errors) sum_sq += (v - result.b_prime_vs_true_on_db.aae) * (v - result.b_prime_vs_true_on_db.aae);
             result.b_prime_vs_true_on_db.aae_variance = sum_sq / b_prime_abs_errors.size();
@@ -401,16 +420,17 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
     // Insert timestamp before file extension
     string output_file = config.output_file;
     uint32_t ext_pos = output_file.find_last_of('.');
-    if (ext_pos != string::npos) {
-        output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos);
-    } else {
+    if (ext_pos != string::npos) { output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos); }
+    else
+    {
         output_file += "_" + timestamp;
     }
 
     export_to_json(output_file, config, rs_config, all_results);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     ConfigParser parser;
     SplitConfig app_config;
     ReSketchConfig rs_config;
@@ -418,13 +438,15 @@ int main(int argc, char **argv) {
     SplitConfig::add_params_to_config_parser(app_config, parser);
     ReSketchConfig::add_params_to_config_parser(rs_config, parser);
 
-    if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h")) {
+    if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h"))
+    {
         parser.PrintUsage();
         return 0;
     }
 
     Status s = parser.ParseCommandLine(argc, argv);
-    if (!s.IsOK()) {
+    if (!s.IsOK())
+    {
         fprintf(stderr, "%s\n", s.ToString().c_str());
         return -1;
     }

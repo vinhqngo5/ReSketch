@@ -1,10 +1,11 @@
 #pragma once
 
-#include "frequency_summary.hpp"
 #include "frequency_summary_config.hpp"
+
+#include "frequency_summary.hpp"
 #include "hash/xxhash64.hpp"
-// #include "quantile_summary/kll.hpp"
 #include "quantile_summary/kll_datasketches.hpp"
+
 #include <algorithm>
 #include <limits>
 #include <map>
@@ -14,21 +15,25 @@
 #include <vector>
 
 // using KLL = KLLXX;
-class ReSketchV2 : public FrequencySummary {
-  private:
-    struct Bucket {
+class ReSketchV2 : public FrequencySummary
+{
+private:
+    struct Bucket
+    {
         uint64_t count = 0;
         KLL q_sketch;
 
         Bucket() = default;
+
         explicit Bucket(const KLLConfig &kll_config) : q_sketch(kll_config) {}
     };
 
     // A ring is a sorted list of pairs: {hash_point, bucket_id}
     using Ring = std::vector<std::pair<uint64_t, uint32_t>>;
 
-  public:
-    explicit ReSketchV2(const ReSketchConfig &config) : m_config(config), m_width(config.width), m_depth(config.depth), m_kll_config({config.kll_k}) {
+public:
+    explicit ReSketchV2(const ReSketchConfig &config) : m_config(config), m_width(config.width), m_depth(config.depth), m_kll_config({config.kll_k})
+    {
         _initialize_seeds();
         _initialize_pairwise_hash_family();
         _initialize_buckets();
@@ -37,7 +42,8 @@ class ReSketchV2 : public FrequencySummary {
     }
 
     ReSketchV2(uint32_t depth, uint32_t width, const std::vector<uint32_t> &seeds, uint32_t kll_k, uint32_t partition_seed)
-        : m_width(width), m_depth(depth), m_seeds(seeds), m_partition_seed(partition_seed), m_kll_config({kll_k}) {
+        : m_width(width), m_depth(depth), m_seeds(seeds), m_partition_seed(partition_seed), m_kll_config({kll_k})
+    {
         m_config = {m_width, m_depth, kll_k};
         _initialize_pairwise_hash_family();
         _initialize_buckets();
@@ -46,15 +52,18 @@ class ReSketchV2 : public FrequencySummary {
     }
 
     ReSketchV2(uint32_t depth, uint32_t width, const std::vector<uint32_t> &seeds, uint32_t kll_k, uint32_t partition_seed, const std::vector<Ring> &rings)
-        : m_width(width), m_depth(depth), m_seeds(seeds), m_partition_seed(partition_seed), m_kll_config({kll_k}), m_rings(rings) {
+        : m_width(width), m_depth(depth), m_seeds(seeds), m_partition_seed(partition_seed), m_kll_config({kll_k}), m_rings(rings)
+    {
         m_config = {m_width, m_depth, kll_k};
         _initialize_pairwise_hash_family();
         _initialize_buckets();
         m_partition_ranges = {{0, std::numeric_limits<uint64_t>::max()}};
     }
 
-    void update(uint64_t item) override {
-        for (uint32_t i = 0; i < m_depth; ++i) {
+    void update(uint64_t item) override
+    {
+        for (uint32_t i = 0; i < m_depth; ++i)
+        {
             uint64_t h = _placement_hash(item, i);
             uint32_t id = _find_bucket_id(h, m_rings[i]);
             m_buckets[i][id].count++;
@@ -62,31 +71,35 @@ class ReSketchV2 : public FrequencySummary {
         }
     }
 
-    double estimate(uint64_t item) const override {
+    double estimate(uint64_t item) const override
+    {
         std::vector<double> estimates;
         estimates.reserve(m_depth);
-        for (uint32_t i = 0; i < m_depth; ++i) {
+        for (uint32_t i = 0; i < m_depth; ++i)
+        {
             uint64_t h = _placement_hash(item, i);
             uint32_t id = _find_bucket_id(h, m_rings[i]);
             estimates.push_back(m_buckets[i][id].q_sketch.estimate(h));
         }
         std::sort(estimates.begin(), estimates.end());
-        if (m_depth % 2 == 0) {
-            return (estimates[m_depth / 2 - 1] + estimates[m_depth / 2]) / 2.0;
-        } else {
+        if (m_depth % 2 == 0) { return (estimates[m_depth / 2 - 1] + estimates[m_depth / 2]) / 2.0; }
+        else
+        {
             return estimates[m_depth / 2];
         }
     }
 
     // --- Structure-defining Operations ---
 
-    void expand(uint32_t new_width) {
+    void expand(uint32_t new_width)
+    {
         if (new_width <= m_width) throw std::invalid_argument("New width must be larger than current width.");
 
         std::mt19937_64 rng(std::random_device{}());
         std::uniform_int_distribution<uint64_t> dist;
 
-        for (uint32_t i = 0; i < m_depth; ++i) {
+        for (uint32_t i = 0; i < m_depth; ++i)
+        {
             Ring new_ring = m_rings[i];
             for (uint32_t j = 0; j < new_width - m_width; ++j) { new_ring.push_back({dist(rng), m_width + j}); }
             std::sort(new_ring.begin(), new_ring.end());
@@ -98,20 +111,28 @@ class ReSketchV2 : public FrequencySummary {
         m_width = new_width;
     }
 
-    void shrink(uint32_t new_width) {
+    void shrink(uint32_t new_width)
+    {
         if (new_width >= m_width) throw std::invalid_argument("New width must be smaller than current width.");
 
         std::mt19937_64 rng(std::random_device{}());
 
-        for (uint32_t i = 0; i < m_depth; ++i) {
+        for (uint32_t i = 0; i < m_depth; ++i)
+        {
             Ring new_ring = m_rings[i];
             std::shuffle(new_ring.begin(), new_ring.end(), rng);
             new_ring.resize(new_width);
 
             //  reindex the bucket_id of the new ring
-            std::sort(new_ring.begin(), new_ring.end(), [](const auto &a, const auto &b) { return a.second < b.second; });
+            std::sort(
+                new_ring.begin(), new_ring.end(),
+                [](const auto &a, const auto &b)
+                {
+                    return a.second < b.second;
+                });
 
-            for (uint32_t j = 0; j < new_ring.size(); ++j) {
+            for (uint32_t j = 0; j < new_ring.size(); ++j)
+            {
                 new_ring[j].second = j;   // Reassign bucket IDs
             }
 
@@ -124,7 +145,8 @@ class ReSketchV2 : public FrequencySummary {
         m_width = new_width;
     }
 
-    uint32_t get_max_memory_usage() const {
+    uint32_t get_max_memory_usage() const
+    {
         // uint32_t buckets_grid_memory = m_depth * sizeof(std::vector<Bucket>);
 
         // uint32_t rings_memory = m_depth * sizeof(Ring);
@@ -135,7 +157,8 @@ class ReSketchV2 : public FrequencySummary {
         return single_kll_max_memory * m_depth * m_width;
     }
 
-    static uint32_t calculate_max_width(uint32_t total_memory_bytes, uint32_t depth, uint32_t kll_k) {
+    static uint32_t calculate_max_width(uint32_t total_memory_bytes, uint32_t depth, uint32_t kll_k)
+    {
         if (depth == 0) return 0;
 
         KLL sample_kll({kll_k});
@@ -145,7 +168,8 @@ class ReSketchV2 : public FrequencySummary {
         return static_cast<uint32_t>(max_buckets / depth);
     }
 
-    static ReSketchV2 merge(const ReSketchV2 &s1, const ReSketchV2 &s2) {
+    static ReSketchV2 merge(const ReSketchV2 &s1, const ReSketchV2 &s2)
+    {
         if (s1.m_depth != s2.m_depth || s1.m_kll_config.k != s2.m_kll_config.k) { throw std::invalid_argument("Sketches must have same depth and kll_k to merge."); }
 
         if (s1.m_seeds != s2.m_seeds) { throw std::invalid_argument("Sketches must have the same seeds to merge."); }
@@ -158,11 +182,13 @@ class ReSketchV2 : public FrequencySummary {
 
         ReSketchV2 merged_sketch(s1.m_depth, new_width, s1.m_seeds, s1.m_kll_config.k, s1.m_partition_seed, merged_rings);
 
-        for (uint32_t i = 0; i < s1.m_depth; ++i) {
+        for (uint32_t i = 0; i < s1.m_depth; ++i)
+        {
             auto temp_buckets_1 = _remap_row(s1.m_rings[i], s1.m_buckets[i], merged_sketch.m_rings[i]);
             auto temp_buckets_2 = _remap_row(s2.m_rings[i], s2.m_buckets[i], merged_sketch.m_rings[i]);
 
-            for (uint32_t j = 0; j < new_width; ++j) {
+            for (uint32_t j = 0; j < new_width; ++j)
+            {
                 merged_sketch.m_buckets[i][j].count = temp_buckets_1[j].count + temp_buckets_2[j].count;
                 merged_sketch.m_buckets[i][j].q_sketch = std::move(temp_buckets_1[j].q_sketch);
                 merged_sketch.m_buckets[i][j].q_sketch.merge(temp_buckets_2[j].q_sketch);
@@ -178,7 +204,8 @@ class ReSketchV2 : public FrequencySummary {
     }
 
     // Original merge function that creates new random rings
-    static ReSketchV2 merge_with_new_rings(const ReSketchV2 &s1, const ReSketchV2 &s2) {
+    static ReSketchV2 merge_with_new_rings(const ReSketchV2 &s1, const ReSketchV2 &s2)
+    {
         if (s1.m_depth != s2.m_depth || s1.m_kll_config.k != s2.m_kll_config.k) { throw std::invalid_argument("Sketches must have same depth and kll_k to merge."); }
 
         if (s1.m_seeds != s2.m_seeds) { throw std::invalid_argument("Sketches must have the same seeds to merge."); }
@@ -186,11 +213,13 @@ class ReSketchV2 : public FrequencySummary {
         uint32_t new_width = s1.m_width + s2.m_width;
         ReSketchV2 merged_sketch(s1.m_depth, new_width, s1.m_seeds, s1.m_kll_config.k, s1.m_partition_seed);
 
-        for (uint32_t i = 0; i < s1.m_depth; ++i) {
+        for (uint32_t i = 0; i < s1.m_depth; ++i)
+        {
             auto temp_buckets_1 = _remap_row(s1.m_rings[i], s1.m_buckets[i], merged_sketch.m_rings[i]);
             auto temp_buckets_2 = _remap_row(s2.m_rings[i], s2.m_buckets[i], merged_sketch.m_rings[i]);
 
-            for (uint32_t j = 0; j < new_width; ++j) {
+            for (uint32_t j = 0; j < new_width; ++j)
+            {
                 merged_sketch.m_buckets[i][j].count = temp_buckets_1[j].count + temp_buckets_2[j].count;
                 merged_sketch.m_buckets[i][j].q_sketch = std::move(temp_buckets_1[j].q_sketch);
                 merged_sketch.m_buckets[i][j].q_sketch.merge(temp_buckets_2[j].q_sketch);
@@ -205,7 +234,8 @@ class ReSketchV2 : public FrequencySummary {
         return merged_sketch;
     }
 
-    static std::pair<ReSketchV2, ReSketchV2> split(const ReSketchV2 &sketch, uint32_t width_1, uint32_t width_2) {
+    static std::pair<ReSketchV2, ReSketchV2> split(const ReSketchV2 &sketch, uint32_t width_1, uint32_t width_2)
+    {
         if (width_1 + width_2 != sketch.m_width) { throw std::invalid_argument("Split widths must sum to original width."); }
 
         ReSketchV2 s1(sketch.m_depth, width_1, sketch.m_seeds, sketch.m_kll_config.k, sketch.m_partition_seed);
@@ -214,7 +244,8 @@ class ReSketchV2 : public FrequencySummary {
         uint64_t split_point = static_cast<uint64_t>((static_cast<long double>(width_1) / (width_1 + width_2)) * std::numeric_limits<uint64_t>::max());
 
         // Process each row
-        for (uint32_t row = 0; row < sketch.m_depth; ++row) {
+        for (uint32_t row = 0; row < sketch.m_depth; ++row)
+        {
             // std::cout << "\n=== Processing Row " << row << " ===" << std::endl;
 
             // Print original KLLs before split
@@ -229,32 +260,40 @@ class ReSketchV2 : public FrequencySummary {
             std::map<uint32_t, std::vector<std::pair<uint64_t, uint64_t>>> s1_bucket_items;
             std::map<uint32_t, std::vector<std::pair<uint64_t, uint64_t>>> s2_bucket_items;
 
-            for (uint32_t old_bucket_id = 0; old_bucket_id < sketch.m_width; ++old_bucket_id) {
+            for (uint32_t old_bucket_id = 0; old_bucket_id < sketch.m_width; ++old_bucket_id)
+            {
                 const auto &kll = sketch.m_buckets[row][old_bucket_id].q_sketch;
 
                 // Step 2: Extract and partition items based on partition hash
-                kll.for_each_summarized_item([&](uint64_t item, uint64_t weight) {
-                    // Recover the partition hash from the placement hash
-                    uint64_t partition_hash = sketch._recover_partition_hash(item, row);
+                kll.for_each_summarized_item(
+                    [&](uint64_t item, uint64_t weight)
+                    {
+                        // Recover the partition hash from the placement hash
+                        uint64_t partition_hash = sketch._recover_partition_hash(item, row);
 
-                    // Determine which sketch this item belongs to based on split point
-                    if (partition_hash < split_point) {
-                        uint32_t new_bucket_id = _find_bucket_id(item, s1.m_rings[row]);
-                        s1_bucket_items[new_bucket_id].emplace_back(item, weight);
-                        s1.m_buckets[row][new_bucket_id].count += weight;
-                    } else {
-                        uint32_t new_bucket_id = _find_bucket_id(item, s2.m_rings[row]);
-                        s2_bucket_items[new_bucket_id].emplace_back(item, weight);
-                        s2.m_buckets[row][new_bucket_id].count += weight;
-                    }
-                });
+                        // Determine which sketch this item belongs to based on split point
+                        if (partition_hash < split_point)
+                        {
+                            uint32_t new_bucket_id = _find_bucket_id(item, s1.m_rings[row]);
+                            s1_bucket_items[new_bucket_id].emplace_back(item, weight);
+                            s1.m_buckets[row][new_bucket_id].count += weight;
+                        }
+                        else
+                        {
+                            uint32_t new_bucket_id = _find_bucket_id(item, s2.m_rings[row]);
+                            s2_bucket_items[new_bucket_id].emplace_back(item, weight);
+                            s2.m_buckets[row][new_bucket_id].count += weight;
+                        }
+                    });
             }
 
             // Step 3: Construct new KLLs from the partitioned items
-            for (auto &[bucket_id, weighted_items] : s1_bucket_items) {
+            for (auto &[bucket_id, weighted_items] : s1_bucket_items)
+            {
                 if (!weighted_items.empty()) { s1.m_buckets[row][bucket_id].q_sketch = KLL::construct_from_weighted_items(weighted_items, sketch.m_kll_config); }
             }
-            for (auto &[bucket_id, weighted_items] : s2_bucket_items) {
+            for (auto &[bucket_id, weighted_items] : s2_bucket_items)
+            {
                 if (!weighted_items.empty()) { s2.m_buckets[row][bucket_id].q_sketch = KLL::construct_from_weighted_items(weighted_items, sketch.m_kll_config); }
             }
 
@@ -272,7 +311,8 @@ class ReSketchV2 : public FrequencySummary {
         s1.m_partition_ranges.clear();
         s2.m_partition_ranges.clear();
 
-        for (const auto &[start, end] : sketch.m_partition_ranges) {
+        for (const auto &[start, end] : sketch.m_partition_ranges)
+        {
             if (start < split_point) { s1.m_partition_ranges.push_back({start, std::min(end, split_point)}); }
             if (end > split_point) { s2.m_partition_ranges.push_back({std::max(start, split_point), end}); }
         }
@@ -284,9 +324,11 @@ class ReSketchV2 : public FrequencySummary {
     static uint64_t compute_partition_hash(uint64_t item, uint32_t partition_seed) { return XXHash64::hash(&item, sizeof(uint64_t), partition_seed); }
 
     // Check if this sketch is responsible for a given item based on partition ranges
-    bool is_responsible_for(uint64_t item) const {
+    bool is_responsible_for(uint64_t item) const
+    {
         uint64_t h = _partition_hash(item);
-        for (const auto &[start, end] : m_partition_ranges) {
+        for (const auto &[start, end] : m_partition_ranges)
+        {
             if (h >= start && h < end) return true;
         }
         return false;
@@ -298,10 +340,11 @@ class ReSketchV2 : public FrequencySummary {
     // Get the partition ranges this sketch is responsible for
     const std::vector<std::pair<uint64_t, uint64_t>> &get_partition_ranges() const { return m_partition_ranges; }
 
-  private:
+private:
     // Compute modular multiplicative inverse using extended Euclidean algorithm
     // For odd 'a', there exists a_inv such that a * a_inv ≡ 1 (mod 2^64)
-    static uint64_t _mod_inverse(uint64_t a) {
+    static uint64_t _mod_inverse(uint64_t a)
+    {
         // Using the fact that for odd a: a * a_inv ≡ 1 (mod 2^64)
         // We can use extended GCD or Newton's method
         // Newton's method: x_{n+1} = x_n * (2 - a * x_n)
@@ -316,24 +359,30 @@ class ReSketchV2 : public FrequencySummary {
     }
 
     // Helper function to print KLL details by level
-    static void _print_kll_details(const std::string &label, uint32_t bucket_id, const KLL &kll) {
+    static void _print_kll_details(const std::string &label, uint32_t bucket_id, const KLL &kll)
+    {
         std::cout << label << " Bucket " << bucket_id << ": n=" << kll.get_n() << ", num_retained=" << kll.get_num_retained()
                   << ", num_levels=" << static_cast<int>(kll.get_num_levels()) << std::endl;
 
         std::map<uint8_t, std::vector<uint64_t>> items_by_level;
-        kll.for_each_summarized_item([&](uint64_t item, uint64_t weight) {
-            uint8_t level = 0;
-            uint64_t w = weight;
-            while (w > 1) {
-                w >>= 1;
-                ++level;
-            }
-            items_by_level[level].push_back(item);
-        });
+        kll.for_each_summarized_item(
+            [&](uint64_t item, uint64_t weight)
+            {
+                uint8_t level = 0;
+                uint64_t w = weight;
+                while (w > 1)
+                {
+                    w >>= 1;
+                    ++level;
+                }
+                items_by_level[level].push_back(item);
+            });
 
-        for (const auto &[level, items] : items_by_level) {
+        for (const auto &[level, items] : items_by_level)
+        {
             std::cout << "    Level " << static_cast<int>(level) << " (weight=" << (1ULL << level) << "): ";
-            for (size_t i = 0; i < items.size(); ++i) {
+            for (size_t i = 0; i < items.size(); ++i)
+            {
                 std::cout << items[i];
                 if (i < items.size() - 1) std::cout << ", ";
             }
@@ -341,7 +390,8 @@ class ReSketchV2 : public FrequencySummary {
         }
     }
 
-    void _initialize_seeds() {
+    void _initialize_seeds()
+    {
         std::mt19937_64 rng(std::random_device{}());
         std::uniform_int_distribution<uint32_t> seed_dist;
         std::uniform_int_distribution<uint64_t> param_dist;
@@ -355,7 +405,8 @@ class ReSketchV2 : public FrequencySummary {
         for (uint32_t i = 0; i < m_depth; ++i) { m_seeds.push_back(seed_dist(rng)); }
 
         std::mt19937_64 param_rng(m_partition_seed);
-        for (uint32_t i = 0; i < m_depth; ++i) {
+        for (uint32_t i = 0; i < m_depth; ++i)
+        {
             param_rng.seed(m_seeds[i]);
             uint64_t a = param_dist(param_rng) | 1;
             m_a.push_back(a);
@@ -364,13 +415,15 @@ class ReSketchV2 : public FrequencySummary {
         }
     }
 
-    void _initialize_pairwise_hash_family() {
+    void _initialize_pairwise_hash_family()
+    {
         std::mt19937_64 rng(m_partition_seed);
         std::uniform_int_distribution<uint64_t> param_dist;
         m_a.reserve(m_depth);
         m_b.reserve(m_depth);
         m_a_inv.reserve(m_depth);
-        for (uint32_t i = 0; i < m_depth; ++i) {
+        for (uint32_t i = 0; i < m_depth; ++i)
+        {
             rng.seed(m_seeds[i]);
             uint64_t a = param_dist(rng) | 1;
             m_a.push_back(a);
@@ -379,19 +432,23 @@ class ReSketchV2 : public FrequencySummary {
         }
     }
 
-    void _initialize_buckets() {
+    void _initialize_buckets()
+    {
         m_buckets.resize(m_depth);
-        for (uint32_t i = 0; i < m_depth; ++i) {
+        for (uint32_t i = 0; i < m_depth; ++i)
+        {
             m_buckets[i].reserve(m_width);
             for (uint32_t j = 0; j < m_width; ++j) { m_buckets[i].emplace_back(m_kll_config); }
         }
     }
 
-    void _initialize_rings() {
+    void _initialize_rings()
+    {
         std::mt19937_64 rng(std::random_device{}());
         std::uniform_int_distribution<uint64_t> dist;
         m_rings.resize(m_depth);
-        for (uint32_t i = 0; i < m_depth; ++i) {
+        for (uint32_t i = 0; i < m_depth; ++i)
+        {
             m_rings[i].reserve(m_width);
             for (uint32_t j = 0; j < m_width; ++j) { m_rings[i].push_back({dist(rng), j}); }
             std::sort(m_rings[i].begin(), m_rings[i].end());
@@ -402,28 +459,34 @@ class ReSketchV2 : public FrequencySummary {
     uint64_t _partition_hash(uint64_t item) const { return XXHash64::hash(&item, sizeof(uint64_t), m_partition_seed); }
 
     // Step 2: Create a reversible placement hash
-    uint64_t _placement_hash(uint64_t item, uint32_t row_index) const {
+    uint64_t _placement_hash(uint64_t item, uint32_t row_index) const
+    {
         uint64_t partition_h = _partition_hash(item);
         return m_a[row_index] * partition_h + m_b[row_index];
     }
 
     // Reverses Step 2 to recover the partition hash using modular multiplicative inverse.
-    uint64_t _recover_partition_hash(uint64_t placement_hash, uint32_t row_index) const {
+    uint64_t _recover_partition_hash(uint64_t placement_hash, uint32_t row_index) const
+    {
         // placement_hash = a * partition_hash + b (mod 2^64) -> partition_hash = (placement_hash - b) * a_inv (mod 2^64)
         return (placement_hash - m_b[row_index]) * m_a_inv[row_index];
     }
 
-    static uint32_t _find_bucket_id(uint64_t item_hash, const Ring &ring) {
+    static uint32_t _find_bucket_id(uint64_t item_hash, const Ring &ring)
+    {
         auto it = std::lower_bound(ring.begin(), ring.end(), std::make_pair(item_hash, std::numeric_limits<uint32_t>::max()));
-        if (it == ring.end() || ring.empty()) {
+        if (it == ring.end() || ring.empty())
+        {
             return ring.empty() ? 0 : ring.front().second;   // Wrap around
         }
         return it->second;
     }
 
-    static std::vector<Bucket> _remap_row(const Ring &in_ring, const std::vector<Bucket> &in_buckets, const Ring &out_ring) {
+    static std::vector<Bucket> _remap_row(const Ring &in_ring, const std::vector<Bucket> &in_buckets, const Ring &out_ring)
+    {
         std::vector<Bucket> out_buckets;
-        if (in_buckets.empty()) {
+        if (in_buckets.empty())
+        {
             out_buckets.resize(out_ring.size());
             return out_buckets;
         }
@@ -439,7 +502,8 @@ class ReSketchV2 : public FrequencySummary {
         if (all_points.empty()) return out_buckets;
 
         uint64_t prev_p = all_points.back();
-        for (const auto &current_p : all_points) {
+        for (const auto &current_p : all_points)
+        {
             uint64_t start_p = prev_p;
             uint64_t end_p = current_p;
 
@@ -460,7 +524,8 @@ class ReSketchV2 : public FrequencySummary {
             // cout k of in bucket and out bucket
             // std::cout << "In Bucket k: " << in_bucket.q_sketch.get_config().k << ", Out Bucket k: " << out_buckets[out_id].q_sketch.get_config().k << std::endl;
 
-            if (count > 0) {
+            if (count > 0)
+            {
                 out_buckets[out_id].count += static_cast<uint64_t>(std::round(count));
                 auto sub_sketch = in_bucket.q_sketch.rebuild(start_p, end_p);
                 out_buckets[out_id].q_sketch.merge(sub_sketch);
@@ -471,7 +536,8 @@ class ReSketchV2 : public FrequencySummary {
     }
 
     // Helper to merge two rings
-    static Ring _merge_rings(const Ring &ring1, const Ring &ring2) {
+    static Ring _merge_rings(const Ring &ring1, const Ring &ring2)
+    {
         Ring merged_ring;
         merged_ring.reserve(ring1.size() + ring2.size());
 
@@ -486,7 +552,8 @@ class ReSketchV2 : public FrequencySummary {
     }
 
     // Helper to merge and sort partition ranges, combining overlapping/adjacent ranges
-    static void _merge_and_sort_ranges(std::vector<std::pair<uint64_t, uint64_t>> &ranges) {
+    static void _merge_and_sort_ranges(std::vector<std::pair<uint64_t, uint64_t>> &ranges)
+    {
         if (ranges.empty()) return;
 
         // Sort by start position
@@ -496,14 +563,15 @@ class ReSketchV2 : public FrequencySummary {
         std::vector<std::pair<uint64_t, uint64_t>> merged;
         merged.push_back(ranges[0]);
 
-        for (uint32_t i = 1; i < ranges.size(); ++i) {
+        for (uint32_t i = 1; i < ranges.size(); ++i)
+        {
             auto &last = merged.back();
             const auto &current = ranges[i];
 
             // If overlapping or adjacent, merge them
-            if (current.first <= last.second) {
-                last.second = std::max(last.second, current.second);
-            } else {
+            if (current.first <= last.second) { last.second = std::max(last.second, current.second); }
+            else
+            {
                 merged.push_back(current);
             }
         }
@@ -517,10 +585,12 @@ class ReSketchV2 : public FrequencySummary {
     std::vector<uint32_t> m_seeds;
     uint32_t m_partition_seed;   // Seed for the first hashing step (partition hash)
     KLLConfig m_kll_config;
-    std::vector<std::pair<uint64_t, uint64_t>> m_partition_ranges;   // Ranges this sketch is responsible for [(start, end), ...]
+    std::vector<std::pair<uint64_t, uint64_t>> m_partition_ranges;
+    // Ranges this sketch is responsible for [(start, end), ...]
     std::vector<uint64_t> m_a;
     std::vector<uint64_t> m_b;
-    std::vector<uint64_t> m_a_inv;   // Pre-calculated modular inverses of 'a' for each row to speed-up the reversible placement hash
+    std::vector<uint64_t> m_a_inv;
+    // Pre-calculated modular inverses of 'a' for each row to speed-up the reversible placement hash
 
     std::vector<Ring> m_rings;
     std::vector<std::vector<Bucket>> m_buckets;

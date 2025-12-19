@@ -1,5 +1,13 @@
-#define DOCTEST_CONFIG_IMPLEMENT
-#include "doctest.h"
+#include "frequency_summary/frequency_summary_config.hpp"
+
+#include "frequency_summary/resketchv2.hpp"
+#include "quantile_summary/kll.hpp"
+#include "common.hpp"
+
+#include "utils/ConfigParser.hpp"
+
+#include <json/json.hpp>
+#include <yaml-cpp/yaml.h>
 
 #include <algorithm>
 #include <chrono>
@@ -9,7 +17,6 @@
 #include <iostream>
 #include <map>
 #include <memory>
-#include <numeric>
 #include <queue>
 #include <random>
 #include <set>
@@ -18,26 +25,12 @@
 #include <sys/stat.h>
 #include <vector>
 
-// Library
-#include "yaml-cpp/yaml.h"
-#include "json/json.hpp"
-
-// Utils
-#include "utils/ConfigParser.hpp"
-
-// Sketch Headers
-#include "frequency_summary/frequency_summary_config.hpp"
-#include "frequency_summary/resketchv2.hpp"
-#include "quantile_summary/kll.hpp"
-
-// Common utilities
-#include "common.hpp"
-
 using namespace std;
 using json = nlohmann::json;
 
 // Dataset configuration
-struct DatasetConfig {
+struct DatasetConfig
+{
     string name;
     string dataset_type;
     string caida_path;
@@ -46,14 +39,16 @@ struct DatasetConfig {
     double zipf_param;
 };
 
-struct DatasetReference {
+struct DatasetReference
+{
     string dataset_name;
     uint64_t num_items;
     uint64_t start_offset;
 };
 
 // Sketch node in DAG
-struct SketchNode {
+struct SketchNode
+{
     string name;
     string operation;
     uint32_t memory_budget_kb;
@@ -62,7 +57,8 @@ struct SketchNode {
 };
 
 // DAG configuration
-struct DAGConfig {
+struct DAGConfig
+{
     string name;
     uint32_t repetitions;
     string output_file;
@@ -81,7 +77,8 @@ struct DAGConfig {
 };
 
 // Checkpoint data
-struct Checkpoint {
+struct Checkpoint
+{
     string sketch_name;
     uint64_t items_processed;
     double throughput_mops;
@@ -94,7 +91,8 @@ struct Checkpoint {
 };
 
 // Result
-struct StructuralOpResult {
+struct StructuralOpResult
+{
     string sketch_name;
     string operation;
     double latency_s;
@@ -105,13 +103,15 @@ struct StructuralOpResult {
     double aae_variance;
 };
 
-struct RepetitionResult {
+struct RepetitionResult
+{
     uint32_t repetition_id;
     vector<Checkpoint> checkpoints;
     vector<StructuralOpResult> structural_ops;
 };
 
-DAGConfig parse_yaml(const string &yaml_file) {
+DAGConfig parse_yaml(const string &yaml_file)
+{
     YAML::Node root = YAML::LoadFile(yaml_file);
     DAGConfig config;
 
@@ -123,7 +123,8 @@ DAGConfig parse_yaml(const string &yaml_file) {
 
     // Parse datasets
     auto datasets_node = root["datasets"];
-    for (auto it = datasets_node.begin(); it != datasets_node.end(); ++it) {
+    for (auto it = datasets_node.begin(); it != datasets_node.end(); ++it)
+    {
         string dataset_name = it->first.as<string>();
         auto ds = it->second;
 
@@ -132,9 +133,9 @@ DAGConfig parse_yaml(const string &yaml_file) {
         dataset.dataset_type = ds["dataset_type"].as<string>();
         dataset.stream_size = ds["stream_size"].as<uint64_t>();
 
-        if (dataset.dataset_type == "caida") {
-            dataset.caida_path = ds["caida_path"].as<string>();
-        } else if (dataset.dataset_type == "zipf") {
+        if (dataset.dataset_type == "caida") { dataset.caida_path = ds["caida_path"].as<string>(); }
+        else if (dataset.dataset_type == "zipf")
+        {
             dataset.stream_diversity = ds["stream_diversity"].as<uint64_t>();
             dataset.zipf_param = ds["zipf_param"].as<double>();
         }
@@ -154,7 +155,8 @@ DAGConfig parse_yaml(const string &yaml_file) {
 
     // Parse sketch nodes
     auto sketches_node = root["sketches"];
-    for (auto it = sketches_node.begin(); it != sketches_node.end(); ++it) {
+    for (auto it = sketches_node.begin(); it != sketches_node.end(); ++it)
+    {
         string sketch_name = it->first.as<string>();
         auto sk = it->second;
 
@@ -165,12 +167,15 @@ DAGConfig parse_yaml(const string &yaml_file) {
 
         if (sk["source"]) { sketch.sources.push_back(sk["source"].as<string>()); }
 
-        if (sk["sources"]) {
+        if (sk["sources"])
+        {
             for (const auto &src : sk["sources"]) { sketch.sources.push_back(src.as<string>()); }
         }
 
-        if (sk["datasets"]) {
-            for (const auto &ds_ref : sk["datasets"]) {
+        if (sk["datasets"])
+        {
+            for (const auto &ds_ref : sk["datasets"])
+            {
                 DatasetReference ref;
                 ref.dataset_name = ds_ref["dataset"].as<string>();
                 ref.num_items = ds_ref["num_items"].as<uint64_t>();
@@ -190,14 +195,17 @@ DAGConfig parse_yaml(const string &yaml_file) {
 }
 
 // Topological sort to determine execution order
-vector<string> topological_sort(const map<string, SketchNode> &sketches) {
+vector<string> topological_sort(const map<string, SketchNode> &sketches)
+{
     map<string, vector<string>> adjacency;
     map<string, int> in_degree;
 
     for (const auto &[name, sketch] : sketches) { in_degree[name] = 0; }
 
-    for (const auto &[name, sketch] : sketches) {
-        for (const auto &src : sketch.sources) {
+    for (const auto &[name, sketch] : sketches)
+    {
+        for (const auto &src : sketch.sources)
+        {
             adjacency[src].push_back(name);
             in_degree[name]++;
         }
@@ -205,23 +213,27 @@ vector<string> topological_sort(const map<string, SketchNode> &sketches) {
 
     // Perform topological sort using Kahn's algorithm
     queue<string> q;
-    for (const auto &[name, deg] : in_degree) {
+    for (const auto &[name, deg] : in_degree)
+    {
         if (deg == 0) { q.push(name); }
     }
 
     vector<string> order;
-    while (!q.empty()) {
+    while (!q.empty())
+    {
         string current = q.front();
         q.pop();
         order.push_back(current);
 
-        for (const auto &neighbor : adjacency[current]) {
+        for (const auto &neighbor : adjacency[current])
+        {
             in_degree[neighbor]--;
             if (in_degree[neighbor] == 0) { q.push(neighbor); }
         }
     }
 
-    if (order.size() != sketches.size()) {
+    if (order.size() != sketches.size())
+    {
         cerr << "Error: Cycle detected in DAG!" << endl;
         exit(1);
     }
@@ -229,12 +241,13 @@ vector<string> topological_sort(const map<string, SketchNode> &sketches) {
     return order;
 }
 
-vector<uint64_t> load_or_generate_dataset(const DatasetConfig &dataset, uint64_t seed) {
+vector<uint64_t> load_or_generate_dataset(const DatasetConfig &dataset, uint64_t seed)
+{
     vector<uint64_t> data;
 
-    if (dataset.dataset_type == "zipf") {
-        data = generate_zipf_data(dataset.stream_size, dataset.stream_diversity, dataset.zipf_param);
-    } else if (dataset.dataset_type == "caida") {
+    if (dataset.dataset_type == "zipf") { data = generate_zipf_data(dataset.stream_size, dataset.stream_diversity, dataset.zipf_param); }
+    else if (dataset.dataset_type == "caida")
+    {
         data = read_caida_data(dataset.caida_path, dataset.stream_size);
         if (data.size() < dataset.stream_size) { cerr << "Warning: CAIDA dataset has fewer items than requested. Using full dataset." << endl; }
     }
@@ -242,19 +255,23 @@ vector<uint64_t> load_or_generate_dataset(const DatasetConfig &dataset, uint64_t
     return data;
 }
 
-void process_data_with_checkpoints(ReSketchV2 &sketch, const vector<uint64_t> &data, uint64_t start_idx, uint64_t num_items, const string &sketch_name,
-                                   uint64_t checkpoint_interval, const map<uint64_t, uint64_t> &ground_truth, vector<Checkpoint> &checkpoints_out) {
+void process_data_with_checkpoints(
+    ReSketchV2 &sketch, const vector<uint64_t> &data, uint64_t start_idx, uint64_t num_items, const string &sketch_name, uint64_t checkpoint_interval,
+    const map<uint64_t, uint64_t> &ground_truth, vector<Checkpoint> &checkpoints_out)
+{
     uint64_t end_idx = min(start_idx + num_items, (uint64_t) data.size());
     uint64_t items_processed_in_phase = 0;
 
     Timer timer;
     timer.start();
 
-    for (uint64_t i = start_idx; i < end_idx; ++i) {
+    for (uint64_t i = start_idx; i < end_idx; ++i)
+    {
         sketch.update(data[i]);
         items_processed_in_phase++;
 
-        if (items_processed_in_phase % checkpoint_interval == 0 || i == end_idx - 1) {
+        if (items_processed_in_phase % checkpoint_interval == 0 || i == end_idx - 1)
+        {
             double elapsed = timer.stop_s();
             double throughput = (elapsed > 0) ? (items_processed_in_phase / elapsed / 1e6) : 0;
 
@@ -297,7 +314,8 @@ void process_data_with_checkpoints(ReSketchV2 &sketch, const vector<uint64_t> &d
     }
 }
 
-void export_to_json(const string &filename, const DAGConfig &config, const vector<RepetitionResult> &results) {
+void export_to_json(const string &filename, const DAGConfig &config, const vector<RepetitionResult> &results)
+{
     create_directory(filename);
 
     // Build JSON object
@@ -321,20 +339,22 @@ void export_to_json(const string &filename, const DAGConfig &config, const vecto
 
     // Datasets config section
     json datasets_json;
-    for (const auto &[name, ds] : config.datasets) {
+    for (const auto &[name, ds] : config.datasets)
+    {
         datasets_json[name] = {{"dataset_type", ds.dataset_type}, {"stream_size", ds.stream_size}};
-        if (ds.dataset_type == "zipf") {
+        if (ds.dataset_type == "zipf")
+        {
             datasets_json[name]["stream_diversity"] = ds.stream_diversity;
             datasets_json[name]["zipf_param"] = ds.zipf_param;
-        } else if (ds.dataset_type == "caida") {
-            datasets_json[name]["caida_path"] = ds.caida_path;
         }
+        else if (ds.dataset_type == "caida") { datasets_json[name]["caida_path"] = ds.caida_path; }
     }
     j["config"]["datasets"] = datasets_json;
 
     // Sketches config section
     json sketches_json;
-    for (const auto &sketch_name : config.execution_order) {
+    for (const auto &sketch_name : config.execution_order)
+    {
         const auto &sketch = config.sketches.at(sketch_name);
         sketches_json[sketch_name] = {{"operation", sketch.operation}, {"memory_budget_kb", sketch.memory_budget_kb}};
         if (!sketch.sources.empty()) { sketches_json[sketch_name]["sources"] = sketch.sources; }
@@ -343,40 +363,46 @@ void export_to_json(const string &filename, const DAGConfig &config, const vecto
 
     // Results section
     j["results"] = json::array();
-    for (const auto &rep : results) {
+    for (const auto &rep : results)
+    {
         json rep_json;
         rep_json["repetition_id"] = rep.repetition_id;
 
         rep_json["checkpoints"] = json::array();
-        for (const auto &cp : rep.checkpoints) {
-            rep_json["checkpoints"].push_back({{{"sketch_name", cp.sketch_name},
-                                                {"items_processed", cp.items_processed},
-                                                {"throughput_mops", cp.throughput_mops},
-                                                {"query_throughput_mops", cp.query_throughput_mops},
-                                                {"memory_kb", cp.memory_kb},
-                                                {"are", cp.are},
-                                                {"aae", cp.aae},
-                                                {"are_variance", cp.are_variance},
-                                                {"aae_variance", cp.aae_variance}}});
+        for (const auto &cp : rep.checkpoints)
+        {
+            rep_json["checkpoints"].push_back(
+                {{{"sketch_name", cp.sketch_name},
+                  {"items_processed", cp.items_processed},
+                  {"throughput_mops", cp.throughput_mops},
+                  {"query_throughput_mops", cp.query_throughput_mops},
+                  {"memory_kb", cp.memory_kb},
+                  {"are", cp.are},
+                  {"aae", cp.aae},
+                  {"are_variance", cp.are_variance},
+                  {"aae_variance", cp.aae_variance}}});
         }
 
         rep_json["structural_operations"] = json::array();
-        for (const auto &op : rep.structural_ops) {
-            rep_json["structural_operations"].push_back({{{"sketch_name", op.sketch_name},
-                                                          {"operation", op.operation},
-                                                          {"latency_s", op.latency_s},
-                                                          {"memory_kb", op.memory_kb},
-                                                          {"are", op.are},
-                                                          {"aae", op.aae},
-                                                          {"are_variance", op.are_variance},
-                                                          {"aae_variance", op.aae_variance}}});
+        for (const auto &op : rep.structural_ops)
+        {
+            rep_json["structural_operations"].push_back(
+                {{{"sketch_name", op.sketch_name},
+                  {"operation", op.operation},
+                  {"latency_s", op.latency_s},
+                  {"memory_kb", op.memory_kb},
+                  {"are", op.are},
+                  {"aae", op.aae},
+                  {"are_variance", op.are_variance},
+                  {"aae_variance", op.aae_variance}}});
         }
 
         j["results"].push_back(rep_json);
     }
 
     ofstream out(filename);
-    if (!out.is_open()) {
+    if (!out.is_open())
+    {
         cerr << "Error: Cannot open output file: " << filename << endl;
         return;
     }
@@ -387,7 +413,8 @@ void export_to_json(const string &filename, const DAGConfig &config, const vecto
     cout << "\nResults exported to: " << filename << endl;
 }
 
-void run_dag_experiment(const DAGConfig &config) {
+void run_dag_experiment(const DAGConfig &config)
+{
     cout << "\n=== DAG Execution: " << config.name << " ===" << endl;
     cout << "Repetitions: " << config.repetitions << endl;
     cout << "Master Seed: " << config.master_seed << endl;
@@ -398,7 +425,8 @@ void run_dag_experiment(const DAGConfig &config) {
 
     vector<RepetitionResult> all_results;
 
-    for (uint32_t rep = 0; rep < config.repetitions; ++rep) {
+    for (uint32_t rep = 0; rep < config.repetitions; ++rep)
+    {
         cout << "\n========================================" << endl;
         cout << "Repetition " << (rep + 1) << "/" << config.repetitions << endl;
         cout << "========================================" << endl;
@@ -418,7 +446,8 @@ void run_dag_experiment(const DAGConfig &config) {
 
         // Load all datasets
         map<string, vector<uint64_t>> loaded_datasets;
-        for (const auto &[name, ds_config] : config.datasets) {
+        for (const auto &[name, ds_config] : config.datasets)
+        {
             uint32_t dataset_seed = dist(rng);
             loaded_datasets[name] = load_or_generate_dataset(ds_config, dataset_seed);
             cout << "Loaded dataset '" << name << "': " << loaded_datasets[name].size() << " items" << endl;
@@ -429,15 +458,16 @@ void run_dag_experiment(const DAGConfig &config) {
         set<string> skip_split_operation;
 
         // Process each sketch node in topological order
-        for (const auto &sketch_name : config.execution_order) {
+        for (const auto &sketch_name : config.execution_order)
+        {
             const auto &sketch_node = config.sketches.at(sketch_name);
 
             // Skip structural operation for split sibling, but still process data
             bool skip_structural_op = skip_split_operation.count(sketch_name) > 0;
 
-            if (skip_structural_op) {
-                cout << "\n--- Processing Sketch " << sketch_name << " (split sibling - already created) ---" << endl;
-            } else {
+            if (skip_structural_op) { cout << "\n--- Processing Sketch " << sketch_name << " (split sibling - already created) ---" << endl; }
+            else
+            {
                 cout << "\n--- Processing Sketch " << sketch_name << " (" << sketch_node.operation << ") ---" << endl;
             }
 
@@ -445,15 +475,19 @@ void run_dag_experiment(const DAGConfig &config) {
             uint32_t width = ReSketchV2::calculate_max_width(memory_bytes, config.sketch_depth, config.sketch_kll_k);
 
             // Perform structural operation
-            if (!skip_structural_op) {
-                if (sketch_node.operation == "create") {
+            if (!skip_structural_op)
+            {
+                if (sketch_node.operation == "create")
+                {
                     sketches[sketch_name] = make_unique<ReSketchV2>(config.sketch_depth, width, shared_seeds, config.sketch_kll_k, shared_partition_seed);
                     sketch_ground_truths[sketch_name] = map<uint64_t, uint64_t>();
                     uint64_t actual_memory_kb = sketches[sketch_name]->get_max_memory_usage() / 1024;
                     cout << "Created sketch with width=" << width << " | budget=" << sketch_node.memory_budget_kb << " KB, actual=" << actual_memory_kb << " KB" << endl;
-
-                } else if (sketch_node.operation == "expand") {
-                    if (sketch_node.sources.empty() || sketches.find(sketch_node.sources[0]) == sketches.end()) {
+                }
+                else if (sketch_node.operation == "expand")
+                {
+                    if (sketch_node.sources.empty() || sketches.find(sketch_node.sources[0]) == sketches.end())
+                    {
                         cerr << "Error: Source sketch for expand not found!" << endl;
                         exit(1);
                     }
@@ -491,9 +525,11 @@ void run_dag_experiment(const DAGConfig &config) {
                     uint64_t actual_memory_kb = sketches[sketch_name]->get_max_memory_usage() / 1024;
                     cout << "Expanded from " << source_name << " to width=" << width << " | budget=" << sketch_node.memory_budget_kb << " KB, actual=" << actual_memory_kb
                          << " KB, latency=" << latency << "s" << endl;
-
-                } else if (sketch_node.operation == "shrink") {
-                    if (sketch_node.sources.empty() || sketches.find(sketch_node.sources[0]) == sketches.end()) {
+                }
+                else if (sketch_node.operation == "shrink")
+                {
+                    if (sketch_node.sources.empty() || sketches.find(sketch_node.sources[0]) == sketches.end())
+                    {
                         cerr << "Error: Source sketch for shrink not found!" << endl;
                         exit(1);
                     }
@@ -531,18 +567,22 @@ void run_dag_experiment(const DAGConfig &config) {
                     uint64_t actual_memory_kb = sketches[sketch_name]->get_max_memory_usage() / 1024;
                     cout << "Shrunk from " << source_name << " to width=" << width << " | budget=" << sketch_node.memory_budget_kb << " KB, actual=" << actual_memory_kb
                          << " KB, latency=" << latency << "s" << endl;
-
-                } else if (sketch_node.operation == "merge") {
+                }
+                else if (sketch_node.operation == "merge")
+                {
                     Timer op_timer;
                     op_timer.start();
 
-                    if (sketch_node.sources.size() < 2) {
+                    if (sketch_node.sources.size() < 2)
+                    {
                         cerr << "Error: Merge operation requires at least 2 sources!" << endl;
                         exit(1);
                     }
 
-                    for (const auto &source_name : sketch_node.sources) {
-                        if (sketches.find(source_name) == sketches.end()) {
+                    for (const auto &source_name : sketch_node.sources)
+                    {
+                        if (sketches.find(source_name) == sketches.end())
+                        {
                             cerr << "Error: Source sketch " << source_name << " not found!" << endl;
                             exit(1);
                         }
@@ -557,7 +597,8 @@ void run_dag_experiment(const DAGConfig &config) {
                     sketches[sketch_name] = make_unique<ReSketchV2>(std::move(merged));
 
                     sketch_ground_truths[sketch_name] = map<uint64_t, uint64_t>();
-                    for (const auto &source_name : sketch_node.sources) {
+                    for (const auto &source_name : sketch_node.sources)
+                    {
                         for (const auto &[item, freq] : sketch_ground_truths[source_name]) { sketch_ground_truths[sketch_name][item] += freq; }
                     }
 
@@ -582,9 +623,11 @@ void run_dag_experiment(const DAGConfig &config) {
                     for (const auto &src : sketch_node.sources) { cout << src << " "; }
                     cout << "-> " << sketch_name << " | budget=" << sketch_node.memory_budget_kb << " KB, actual=" << actual_memory_kb
                          << " KB (sum of sources), latency=" << latency << "s" << endl;
-
-                } else if (sketch_node.operation == "split") {
-                    if (sketch_node.sources.empty() || sketches.find(sketch_node.sources[0]) == sketches.end()) {
+                }
+                else if (sketch_node.operation == "split")
+                {
+                    if (sketch_node.sources.empty() || sketches.find(sketch_node.sources[0]) == sketches.end())
+                    {
                         cerr << "Error: Source sketch for split not found!" << endl;
                         exit(1);
                     }
@@ -592,7 +635,8 @@ void run_dag_experiment(const DAGConfig &config) {
                     string source_name = sketch_node.sources[0];
 
                     auto sibling_iter = std::find(config.execution_order.begin(), config.execution_order.end(), sketch_name);
-                    if (sibling_iter == config.execution_order.end() || std::next(sibling_iter) == config.execution_order.end()) {
+                    if (sibling_iter == config.execution_order.end() || std::next(sibling_iter) == config.execution_order.end())
+                    {
                         cerr << "Error: Split operation requires a sibling sketch in execution order!" << endl;
                         exit(1);
                     }
@@ -600,7 +644,8 @@ void run_dag_experiment(const DAGConfig &config) {
                     string sibling_name = *std::next(sibling_iter);
                     const auto &sibling_node = config.sketches.at(sibling_name);
 
-                    if (sibling_node.operation != "split" || sibling_node.sources.empty() || sibling_node.sources[0] != source_name) {
+                    if (sibling_node.operation != "split" || sibling_node.sources.empty() || sibling_node.sources[0] != source_name)
+                    {
                         cerr << "Error: Split sibling mismatch! Expected " << sibling_name << " to split from " << source_name << endl;
                         exit(1);
                     }
@@ -627,10 +672,11 @@ void run_dag_experiment(const DAGConfig &config) {
 
                     // Filter ground truth for each split sketch based on partition responsibility
                     map<uint64_t, uint64_t> ground_truth_first, ground_truth_second;
-                    for (const auto &[item, freq] : sketch_ground_truths[source_name]) {
-                        if (sketches[sketch_name]->is_responsible_for(item)) {
-                            ground_truth_first[item] = freq;
-                        } else {
+                    for (const auto &[item, freq] : sketch_ground_truths[source_name])
+                    {
+                        if (sketches[sketch_name]->is_responsible_for(item)) { ground_truth_first[item] = freq; }
+                        else
+                        {
                             ground_truth_second[item] = freq;
                         }
                     }
@@ -678,10 +724,12 @@ void run_dag_experiment(const DAGConfig &config) {
             }
 
             // Process datasets for this sketch
-            if (!sketch_node.datasets.empty()) {
+            if (!sketch_node.datasets.empty())
+            {
                 cout << "Processing datasets for " << sketch_name << "..." << endl;
 
-                for (const auto &ds_ref : sketch_node.datasets) {
+                for (const auto &ds_ref : sketch_node.datasets)
+                {
                     const auto &data = loaded_datasets[ds_ref.dataset_name];
 
                     cout << "  Dataset: " << ds_ref.dataset_name << ", items: " << ds_ref.num_items << ", offset: " << ds_ref.start_offset << endl;
@@ -690,16 +738,21 @@ void run_dag_experiment(const DAGConfig &config) {
                     auto partition_ranges = sketches[sketch_name]->get_partition_ranges();
                     bool has_full_coverage = (partition_ranges.size() == 1 && partition_ranges[0].first == 0 && partition_ranges[0].second == UINT64_MAX);
 
-                    if (has_full_coverage) {
+                    if (has_full_coverage)
+                    {
                         // Sketch covers all partitions -> process all data
                         cout << "  Sketch has full partition coverage -> processing all items" << endl;
-                        for (uint64_t i = ds_ref.start_offset; i < min(ds_ref.start_offset + ds_ref.num_items, (uint64_t) data.size()); ++i) {
+                        for (uint64_t i = ds_ref.start_offset; i < min(ds_ref.start_offset + ds_ref.num_items, (uint64_t) data.size()); ++i)
+                        {
                             sketch_ground_truths[sketch_name][data[i]]++;
                         }
 
-                        process_data_with_checkpoints(*sketches[sketch_name], data, ds_ref.start_offset, ds_ref.num_items, sketch_name, config.checkpoint_interval,
-                                                      sketch_ground_truths[sketch_name], rep_result.checkpoints);
-                    } else {
+                        process_data_with_checkpoints(
+                            *sketches[sketch_name], data, ds_ref.start_offset, ds_ref.num_items, sketch_name, config.checkpoint_interval, sketch_ground_truths[sketch_name],
+                            rep_result.checkpoints);
+                    }
+                    else
+                    {
                         // Sketch has partial partition -> filter data based on responsibility
                         cout << "  Sketch has partial partition coverage -> filtering items" << endl;
                         cout << "  Partition ranges: ";
@@ -714,8 +767,10 @@ void run_dag_experiment(const DAGConfig &config) {
                         uint64_t items_scanned = 0;
                         uint64_t scan_idx = ds_ref.start_offset;
 
-                        while (items_collected < ds_ref.num_items && scan_idx < data.size()) {
-                            if (sketches[sketch_name]->is_responsible_for(data[scan_idx])) {
+                        while (items_collected < ds_ref.num_items && scan_idx < data.size())
+                        {
+                            if (sketches[sketch_name]->is_responsible_for(data[scan_idx]))
+                            {
                                 filtered_data.push_back(data[scan_idx]);
                                 sketch_ground_truths[sketch_name][data[scan_idx]]++;
                                 items_collected++;
@@ -727,9 +782,11 @@ void run_dag_experiment(const DAGConfig &config) {
                         cout << "  Filtered: " << items_collected << " items collected (scanned " << items_scanned << " items)" << endl;
 
                         // Process filtered data
-                        if (!filtered_data.empty()) {
-                            process_data_with_checkpoints(*sketches[sketch_name], filtered_data, 0, filtered_data.size(), sketch_name, config.checkpoint_interval,
-                                                          sketch_ground_truths[sketch_name], rep_result.checkpoints);
+                        if (!filtered_data.empty())
+                        {
+                            process_data_with_checkpoints(
+                                *sketches[sketch_name], filtered_data, 0, filtered_data.size(), sketch_name, config.checkpoint_interval, sketch_ground_truths[sketch_name],
+                                rep_result.checkpoints);
                         }
                     }
                 }
@@ -752,33 +809,39 @@ void run_dag_experiment(const DAGConfig &config) {
     // Insert timestamp before file extension
     string output_file = config.output_file;
     size_t ext_pos = output_file.find_last_of('.');
-    if (ext_pos != string::npos) {
-        output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos);
-    } else {
+    if (ext_pos != string::npos) { output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos); }
+    else
+    {
         output_file += "_" + timestamp;
     }
 
     export_to_json(output_file, config, all_results);
 }
 
-int main(int argc, char **argv) {
-    if (argc < 2) {
+int main(int argc, char **argv)
+{
+    if (argc < 2)
+    {
         cerr << "Usage: " << argv[0] << " <yaml_file>" << endl;
         return 1;
     }
 
     string yaml_file = argv[1];
 
-    try {
+    try
+    {
         DAGConfig config = parse_yaml(yaml_file);
         config.execution_order = topological_sort(config.sketches);
 
         run_dag_experiment(config);
-
-    } catch (const YAML::Exception &e) {
+    }
+    catch (const YAML::Exception &e)
+    {
         cerr << "YAML parsing error: " << e.what() << endl;
         return 1;
-    } catch (const exception &e) {
+    }
+    catch (const exception &e)
+    {
         cerr << "Error: " << e.what() << endl;
         return 1;
     }

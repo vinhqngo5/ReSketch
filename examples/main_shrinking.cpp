@@ -1,5 +1,12 @@
-#define DOCTEST_CONFIG_IMPLEMENT
-#include "doctest.h"
+#include "frequency_summary/frequency_summary_config.hpp"
+
+#include "frequency_summary/geometric_sketch_wrapper.hpp"
+#include "frequency_summary/resketchv2.hpp"
+#include "common.hpp"
+
+#include "utils/ConfigParser.hpp"
+
+#include <json/json.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -16,27 +23,12 @@
 #include <sys/stat.h>
 #include <vector>
 
-// JSON Library
-#include "json/json.hpp"
-
-// Utils
-#include "utils/ConfigParser.hpp"
-
-// Sketch Headers
-#include "frequency_summary/geometric_sketch_wrapper.hpp"
-#include "frequency_summary/resketchv2.hpp"
-
-// Config Headers
-#include "frequency_summary/frequency_summary_config.hpp"
-
-// Common utilities
-#include "common.hpp"
-
 using namespace std;
 using json = nlohmann::json;
 
 // Shrinking Experiment Config
-struct ShrinkingConfig {
+struct ShrinkingConfig
+{
     uint32_t initial_memory_kb = 160;   // Starting memory (e.g., 1.6MB)
     uint32_t max_memory_kb = 640;       // Maximum memory during warmup (e.g., 6.4MB)
     uint32_t final_memory_kb = 32;
@@ -51,7 +43,8 @@ struct ShrinkingConfig {
     float zipf_param = 1.1;
     string output_file = "output/shrinking_results.json";
 
-    static void add_params_to_config_parser(ShrinkingConfig &config, ConfigParser &parser) {
+    static void add_params_to_config_parser(ShrinkingConfig &config, ConfigParser &parser)
+    {
         parser.AddParameter(new UnsignedInt32Parameter("app.initial_memory_kb", "160", &config.initial_memory_kb, false, "Initial memory budget in KB"));
         parser.AddParameter(new UnsignedInt32Parameter("app.max_memory_kb", "640", &config.max_memory_kb, false, "Maximum memory during warmup in KB"));
         parser.AddParameter(new UnsignedInt32Parameter("app.final_memory_kb", "32", &config.final_memory_kb, false, "Final minimum memory in KB"));
@@ -67,7 +60,8 @@ struct ShrinkingConfig {
         parser.AddParameter(new StringParameter("app.output_file", "output/shrinking_results.json", &config.output_file, false, "Output JSON file path"));
     }
 
-    friend std::ostream &operator<<(std::ostream &os, const ShrinkingConfig &config) {
+    friend std::ostream &operator<<(std::ostream &os, const ShrinkingConfig &config)
+    {
         os << "\n=== Shrinking Experiment Configuration ===\n";
         os << "Initial Memory: " << config.initial_memory_kb << " KB\n";
         os << "Max Memory (Warmup): " << config.max_memory_kb << " KB\n";
@@ -79,7 +73,8 @@ struct ShrinkingConfig {
         if (config.dataset_type == "caida") { os << "CAIDA Path: " << config.caida_path << "\n"; }
         os << "Total Items to Process: " << config.total_items << "\n";
         os << "Dataset Size: " << config.stream_size << "\n";
-        if (config.dataset_type == "zipf") {
+        if (config.dataset_type == "zipf")
+        {
             os << "Stream Diversity: " << config.stream_diversity << "\n";
             os << "Zipf Parameter: " << config.zipf_param << "\n";
         }
@@ -89,7 +84,8 @@ struct ShrinkingConfig {
 };
 
 // Checkpoint data
-struct Checkpoint {
+struct Checkpoint
+{
     uint64_t items_processed;
     double throughput_mops;
     double query_throughput_mops;
@@ -103,8 +99,10 @@ struct Checkpoint {
     bool geometric_cannot_shrink;   // True when GeometricSketch can't shrink anymore
 };
 
-void export_to_json(const string &filename, const ShrinkingConfig &config, const ReSketchConfig &rs_config, const GeometricSketchConfig &gs_config,
-                    const map<string, vector<vector<Checkpoint>>> &all_results) {
+void export_to_json(
+    const string &filename, const ShrinkingConfig &config, const ReSketchConfig &rs_config, const GeometricSketchConfig &gs_config,
+    const map<string, vector<vector<Checkpoint>>> &all_results)
+{
     create_directory(filename);
 
     // Build JSON object
@@ -121,42 +119,47 @@ void export_to_json(const string &filename, const ShrinkingConfig &config, const
     j["metadata"] = {{"experiment_type", "shrinking"}, {"timestamp", timestamp.str()}};
 
     // Config section
-    j["config"]["experiment"] = {{"initial_memory_kb", config.initial_memory_kb},
-                                 {"max_memory_kb", config.max_memory_kb},
-                                 {"final_memory_kb", config.final_memory_kb},
-                                 {"shrinking_interval", config.shrinking_interval},
-                                 {"memory_decrement_kb", config.memory_decrement_kb},
-                                 {"repetitions", config.repetitions},
-                                 {"dataset_type", config.dataset_type},
-                                 {"total_items", config.total_items},
-                                 {"stream_size", config.stream_size},
-                                 {"stream_diversity", config.stream_diversity},
-                                 {"zipf_param", config.zipf_param}};
+    j["config"]["experiment"] = {
+        {"initial_memory_kb", config.initial_memory_kb},
+        {"max_memory_kb", config.max_memory_kb},
+        {"final_memory_kb", config.final_memory_kb},
+        {"shrinking_interval", config.shrinking_interval},
+        {"memory_decrement_kb", config.memory_decrement_kb},
+        {"repetitions", config.repetitions},
+        {"dataset_type", config.dataset_type},
+        {"total_items", config.total_items},
+        {"stream_size", config.stream_size},
+        {"stream_diversity", config.stream_diversity},
+        {"zipf_param", config.zipf_param}};
 
     j["config"]["base_sketch_config"]["resketch"] = {{"depth", rs_config.depth}, {"kll_k", rs_config.kll_k}};
     j["config"]["base_sketch_config"]["geometric"] = {{"depth", gs_config.depth}};
 
     // Results section
     json results_json;
-    for (const auto &[sketch_name, repetitions] : all_results) {
+    for (const auto &[sketch_name, repetitions] : all_results)
+    {
         json sketch_reps = json::array();
 
-        for (uint32_t rep = 0; rep < repetitions.size(); ++rep) {
+        for (uint32_t rep = 0; rep < repetitions.size(); ++rep)
+        {
             json rep_json;
             rep_json["repetition_id"] = rep;
 
             json checkpoints_array = json::array();
-            for (const auto &cp : repetitions[rep]) {
-                checkpoints_array.push_back({{"items_processed", cp.items_processed},
-                                             {"throughput_mops", cp.throughput_mops},
-                                             {"query_throughput_mops", cp.query_throughput_mops},
-                                             {"memory_bytes", cp.memory_kb * 1024},
-                                             {"are", cp.are},
-                                             {"aae", cp.aae},
-                                             {"are_variance", cp.are_variance},
-                                             {"aae_variance", cp.aae_variance},
-                                             {"is_warmup", cp.is_warmup},
-                                             {"geometric_cannot_shrink", cp.geometric_cannot_shrink}});
+            for (const auto &cp : repetitions[rep])
+            {
+                checkpoints_array.push_back(
+                    {{"items_processed", cp.items_processed},
+                     {"throughput_mops", cp.throughput_mops},
+                     {"query_throughput_mops", cp.query_throughput_mops},
+                     {"memory_bytes", cp.memory_kb * 1024},
+                     {"are", cp.are},
+                     {"aae", cp.aae},
+                     {"are_variance", cp.are_variance},
+                     {"aae_variance", cp.aae_variance},
+                     {"is_warmup", cp.is_warmup},
+                     {"geometric_cannot_shrink", cp.geometric_cannot_shrink}});
             }
 
             rep_json["checkpoints"] = checkpoints_array;
@@ -170,7 +173,8 @@ void export_to_json(const string &filename, const ShrinkingConfig &config, const
 
     // Write to file
     ofstream out(filename);
-    if (!out.is_open()) {
+    if (!out.is_open())
+    {
         cerr << "Error: Cannot open output file: " << filename << endl;
         return;
     }
@@ -181,7 +185,8 @@ void export_to_json(const string &filename, const ShrinkingConfig &config, const
     cout << "\nResults exported to: " << filename << endl;
 }
 
-void run_shrinking_experiment(const ShrinkingConfig &config, const ReSketchConfig &rs_config, const GeometricSketchConfig &gs_config) {
+void run_shrinking_experiment(const ShrinkingConfig &config, const ReSketchConfig &rs_config, const GeometricSketchConfig &gs_config)
+{
     cout << config << endl;
     cout << rs_config << endl;
     cout << gs_config << endl;
@@ -192,22 +197,29 @@ void run_shrinking_experiment(const ShrinkingConfig &config, const ReSketchConfi
     all_results["StaticReSketch_Max"] = vector<vector<Checkpoint>>(config.repetitions);
     all_results["GeometricSketch"] = vector<vector<Checkpoint>>(config.repetitions);
 
-    for (uint32_t rep = 0; rep < config.repetitions; ++rep) {
+    for (uint32_t rep = 0; rep < config.repetitions; ++rep)
+    {
         cout << "\n=== Repetition " << (rep + 1) << "/" << config.repetitions << " ===" << endl;
 
         // Generate or load base dataset
         vector<uint64_t> base_data;
-        if (config.dataset_type == "zipf") {
+        if (config.dataset_type == "zipf")
+        {
             cout << "Generating Zipf data..." << endl;
             base_data = generate_zipf_data(config.stream_size, config.stream_diversity, config.zipf_param);
-        } else if (config.dataset_type == "caida") {
+        }
+        else if (config.dataset_type == "caida")
+        {
             cout << "Reading CAIDA data..." << endl;
             base_data = read_caida_data(config.caida_path, config.stream_size);
-            if (base_data.empty()) {
+            if (base_data.empty())
+            {
                 cerr << "Error: Failed to read CAIDA data from " << config.caida_path << endl;
                 continue;
             }
-        } else {
+        }
+        else
+        {
             cerr << "Error: Unknown dataset type: " << config.dataset_type << endl;
             continue;
         }
@@ -280,7 +292,8 @@ void run_shrinking_experiment(const ShrinkingConfig &config, const ReSketchConfi
 
         bool gs_cannot_shrink = false;
 
-        while (items_processed < config.total_items) {
+        while (items_processed < config.total_items)
+        {
             uint64_t chunk_size = min((uint64_t) config.shrinking_interval, config.total_items - items_processed);
             uint64_t chunk_start = items_processed;
             uint64_t chunk_end = chunk_start + chunk_size;
@@ -405,30 +418,35 @@ void run_shrinking_experiment(const ShrinkingConfig &config, const ReSketchConfi
             cout << endl;
 
             // Shrink sketches for next iteration (if not at minimum)
-            if (items_processed < config.total_items) {
+            if (items_processed < config.total_items)
+            {
                 // Shrink ReSketch
                 rs_target_memory_bytes = max((uint64_t) final_memory_bytes, rs_target_memory_bytes - memory_decrement_bytes);
                 uint32_t rs_new_width = calculate_width_from_memory_resketch(rs_target_memory_bytes, rs_config.depth, rs_config.kll_k);
 
-                if (rs_new_width < rs_conf.width) {
+                if (rs_new_width < rs_conf.width)
+                {
                     cout << "  Shrinking ReSketch to " << rs_new_width << " width (target: " << (rs_target_memory_bytes / 1024) << " KB)" << endl;
                     rs_sketch.shrink(rs_new_width);
                     rs_conf.width = rs_new_width;
                 }
 
                 // Shrink GeometricSketch (only if it can still shrink)
-                if (!gs_cannot_shrink) {
+                if (!gs_cannot_shrink)
+                {
                     gs_target_memory_bytes = max((uint64_t) initial_memory_bytes, gs_target_memory_bytes - memory_decrement_bytes);
                     uint32_t gs_new_width = calculate_width_from_memory_geometric(gs_target_memory_bytes, gs_config.depth);
 
-                    if (gs_new_width < gs_conf.width) {
+                    if (gs_new_width < gs_conf.width)
+                    {
                         cout << "  Shrinking GeometricSketch to " << gs_new_width << " width (target: " << (gs_target_memory_bytes / 1024) << " KB)" << endl;
                         gs_sketch.shrink(gs_new_width);
                         gs_conf.width = gs_new_width;
                     }
 
                     // Check if GeometricSketch reached its limit (initial memory)
-                    if (gs_target_memory_bytes <= initial_memory_bytes) {
+                    if (gs_target_memory_bytes <= initial_memory_bytes)
+                    {
                         cout << "  GeometricSketch reached initial memory (" << config.initial_memory_kb << " KB) and cannot shrink further!" << endl;
                         gs_cannot_shrink = true;
                     }
@@ -450,16 +468,17 @@ void run_shrinking_experiment(const ShrinkingConfig &config, const ReSketchConfi
     // Insert timestamp before file extension
     string output_file = config.output_file;
     uint32_t ext_pos = output_file.find_last_of('.');
-    if (ext_pos != string::npos) {
-        output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos);
-    } else {
+    if (ext_pos != string::npos) { output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos); }
+    else
+    {
         output_file += "_" + timestamp;
     }
 
     export_to_json(output_file, config, rs_config, gs_config, all_results);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     ConfigParser parser;
     ShrinkingConfig shrink_config;
     ReSketchConfig rs_config;
@@ -469,13 +488,15 @@ int main(int argc, char **argv) {
     ReSketchConfig::add_params_to_config_parser(rs_config, parser);
     GeometricSketchConfig::add_params_to_config_parser(gs_config, parser);
 
-    if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h")) {
+    if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h"))
+    {
         parser.PrintUsage();
         return 0;
     }
 
     Status s = parser.ParseCommandLine(argc, argv);
-    if (!s.IsOK()) {
+    if (!s.IsOK())
+    {
         fprintf(stderr, "%s\n", s.ToString().c_str());
         return -1;
     }

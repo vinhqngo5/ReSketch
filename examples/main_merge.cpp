@@ -1,5 +1,11 @@
-#define DOCTEST_CONFIG_IMPLEMENT
-#include "doctest.h"
+#include "frequency_summary/frequency_summary_config.hpp"
+
+#include "frequency_summary/resketchv2.hpp"
+#include "common.hpp"
+
+#include "utils/ConfigParser.hpp"
+
+#include <json/json.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -16,26 +22,12 @@
 #include <sys/stat.h>
 #include <vector>
 
-// JSON Library
-#include "json/json.hpp"
-
-// Utils
-#include "utils/ConfigParser.hpp"
-
-// Sketch Headers
-#include "frequency_summary/resketchv2.hpp"
-
-// Config Headers
-#include "frequency_summary/frequency_summary_config.hpp"
-
-// Common utilities
-#include "common.hpp"
-
 using namespace std;
 using json = nlohmann::json;
 
 // Merge Experiment Config
-struct MergeConfig {
+struct MergeConfig
+{
     uint32_t memory_budget_kb = 32;
     uint32_t repetitions = 10;
     string dataset_type = "zipf";
@@ -45,7 +37,8 @@ struct MergeConfig {
     float zipf_param = 1.1;
     string output_file = "output/merge_results.json";
 
-    static void add_params_to_config_parser(MergeConfig &config, ConfigParser &parser) {
+    static void add_params_to_config_parser(MergeConfig &config, ConfigParser &parser)
+    {
         parser.AddParameter(new UnsignedInt32Parameter("app.memory_budget_kb", "32", &config.memory_budget_kb, false, "Memory budget in KB per sketch"));
         parser.AddParameter(new UnsignedInt32Parameter("app.repetitions", "10", &config.repetitions, false, "Number of experiment repetitions"));
         parser.AddParameter(new StringParameter("app.dataset_type", "zipf", &config.dataset_type, false, "Dataset type: zipf or caida"));
@@ -56,7 +49,8 @@ struct MergeConfig {
         parser.AddParameter(new StringParameter("app.output_file", "output/merge_results.json", &config.output_file, false, "Output JSON file path"));
     }
 
-    friend std::ostream &operator<<(std::ostream &os, const MergeConfig &config) {
+    friend std::ostream &operator<<(std::ostream &os, const MergeConfig &config)
+    {
         os << "\n=== Merge Experiment Configuration ===\n";
         os << "Memory Budget (per sketch): " << config.memory_budget_kb << " KB\n";
         os << "Repetitions: " << config.repetitions << "\n";
@@ -71,9 +65,11 @@ struct MergeConfig {
 };
 
 // Result for a single repetition
-struct MergeResult {
+struct MergeResult
+{
     // Sketch metadata
-    struct SketchInfo {
+    struct SketchInfo
+    {
         uint64_t memory_bytes;
         double process_time_s;
     };
@@ -85,7 +81,8 @@ struct MergeResult {
     double merge_time_s;
 
     // Accuracy comparisons
-    struct AccuracyComparison {
+    struct AccuracyComparison
+    {
         double are;
         double aae;
         double are_variance;
@@ -98,7 +95,8 @@ struct MergeResult {
     AccuracyComparison d_vs_true_on_all;   // Ground truth sketch D's accuracy on all items
 };
 
-void export_to_json(const string &filename, const MergeConfig &config, const ReSketchConfig &rs_config, const vector<MergeResult> &results) {
+void export_to_json(const string &filename, const MergeConfig &config, const ReSketchConfig &rs_config, const vector<MergeResult> &results)
+{
     create_directory(filename);
 
     json j;
@@ -121,41 +119,44 @@ void export_to_json(const string &filename, const MergeConfig &config, const ReS
 
     // Results section
     j["results"] = json::array();
-    for (uint32_t rep = 0; rep < results.size(); ++rep) {
+    for (uint32_t rep = 0; rep < results.size(); ++rep)
+    {
         const auto &r = results[rep];
-        json rep_json = {{"repetition_id", rep},
-                         {"sketch_a", {{"memory_bytes", r.sketch_a.memory_bytes}, {"process_time_s", r.sketch_a.process_time_s}}},
-                         {"sketch_b", {{"memory_bytes", r.sketch_b.memory_bytes}, {"process_time_s", r.sketch_b.process_time_s}}},
-                         {"sketch_c_merged", {{"memory_bytes", r.sketch_c_merged.memory_bytes}, {"merge_time_s", r.merge_time_s}}},
-                         {"sketch_d_ground_truth", {{"memory_bytes", r.sketch_d_ground_truth.memory_bytes}, {"process_time_s", r.sketch_d_ground_truth.process_time_s}}},
-                         {"accuracy",
-                          {{"a_vs_true_on_da",
-                            {{"are", r.a_vs_true_on_da.are},
-                             {"aae", r.a_vs_true_on_da.aae},
-                             {"are_variance", r.a_vs_true_on_da.are_variance},
-                             {"aae_variance", r.a_vs_true_on_da.aae_variance}}},
-                           {"b_vs_true_on_db",
-                            {{"are", r.b_vs_true_on_db.are},
-                             {"aae", r.b_vs_true_on_db.aae},
-                             {"are_variance", r.b_vs_true_on_db.are_variance},
-                             {"aae_variance", r.b_vs_true_on_db.aae_variance}}},
-                           {"c_vs_true_on_all",
-                            {{"are", r.c_vs_true_on_all.are},
-                             {"aae", r.c_vs_true_on_all.aae},
-                             {"are_variance", r.c_vs_true_on_all.are_variance},
-                             {"aae_variance", r.c_vs_true_on_all.aae_variance}}},
-                           {"d_vs_true_on_all",
-                            {{"are", r.d_vs_true_on_all.are},
-                             {"aae", r.d_vs_true_on_all.aae},
-                             {"are_variance", r.d_vs_true_on_all.are_variance},
-                             {"aae_variance", r.d_vs_true_on_all.aae_variance}}}}}};
+        json rep_json = {
+            {"repetition_id", rep},
+            {"sketch_a", {{"memory_bytes", r.sketch_a.memory_bytes}, {"process_time_s", r.sketch_a.process_time_s}}},
+            {"sketch_b", {{"memory_bytes", r.sketch_b.memory_bytes}, {"process_time_s", r.sketch_b.process_time_s}}},
+            {"sketch_c_merged", {{"memory_bytes", r.sketch_c_merged.memory_bytes}, {"merge_time_s", r.merge_time_s}}},
+            {"sketch_d_ground_truth", {{"memory_bytes", r.sketch_d_ground_truth.memory_bytes}, {"process_time_s", r.sketch_d_ground_truth.process_time_s}}},
+            {"accuracy",
+             {{"a_vs_true_on_da",
+               {{"are", r.a_vs_true_on_da.are},
+                {"aae", r.a_vs_true_on_da.aae},
+                {"are_variance", r.a_vs_true_on_da.are_variance},
+                {"aae_variance", r.a_vs_true_on_da.aae_variance}}},
+              {"b_vs_true_on_db",
+               {{"are", r.b_vs_true_on_db.are},
+                {"aae", r.b_vs_true_on_db.aae},
+                {"are_variance", r.b_vs_true_on_db.are_variance},
+                {"aae_variance", r.b_vs_true_on_db.aae_variance}}},
+              {"c_vs_true_on_all",
+               {{"are", r.c_vs_true_on_all.are},
+                {"aae", r.c_vs_true_on_all.aae},
+                {"are_variance", r.c_vs_true_on_all.are_variance},
+                {"aae_variance", r.c_vs_true_on_all.aae_variance}}},
+              {"d_vs_true_on_all",
+               {{"are", r.d_vs_true_on_all.are},
+                {"aae", r.d_vs_true_on_all.aae},
+                {"are_variance", r.d_vs_true_on_all.are_variance},
+                {"aae_variance", r.d_vs_true_on_all.aae_variance}}}}}};
         ;
         j["results"].push_back(rep_json);
     }
 
     // Write to file
     ofstream out(filename);
-    if (!out.is_open()) {
+    if (!out.is_open())
+    {
         cerr << "Error: Cannot open output file: " << filename << endl;
         return;
     }
@@ -166,7 +167,8 @@ void export_to_json(const string &filename, const MergeConfig &config, const ReS
     cout << "\nResults exported to: " << filename << endl;
 }
 
-void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_config) {
+void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_config)
+{
     cout << config << endl;
     cout << rs_config << endl;
 
@@ -178,7 +180,8 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
 
     cout << "\nReSketch Configuration: depth=" << rs_config.depth << ", k=" << rs_config.kll_k << ", width=" << width << endl;
 
-    for (uint32_t rep = 0; rep < config.repetitions; ++rep) {
+    for (uint32_t rep = 0; rep < config.repetitions; ++rep)
+    {
         cout << "\n=== Repetition " << (rep + 1) << "/" << config.repetitions << " ===" << endl;
 
         MergeResult result;
@@ -186,7 +189,8 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
         // Generate datasets DA and DB with disjoint item ranges
         vector<uint64_t> data_A, data_B;
 
-        if (config.dataset_type == "zipf") {
+        if (config.dataset_type == "zipf")
+        {
             cout << "Generating disjoint Zipf datasets..." << endl;
 
             // DA: items from [0, stream_diversity/2)
@@ -202,10 +206,13 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
 
             cout << "  DA: " << data_A.size() << " items from range [0, " << (half_diversity - 1) << "]" << endl;
             cout << "  DB: " << data_B.size() << " items from range [" << half_diversity << ", " << (config.stream_diversity - 1) << "]" << endl;
-        } else if (config.dataset_type == "caida") {
+        }
+        else if (config.dataset_type == "caida")
+        {
             cout << "Reading CAIDA data..." << endl;
             vector<uint64_t> full_data = read_caida_data(config.caida_path, config.stream_size);
-            if (full_data.empty()) {
+            if (full_data.empty())
+            {
                 cerr << "Error: Failed to read CAIDA data. Skipping repetition." << endl;
                 continue;
             }
@@ -215,28 +222,33 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
             data_A.reserve(full_data.size() / 2);
             data_B.reserve(full_data.size() / 2);
 
-            for (const auto &item : full_data) {
-                if (item % 2 == 0) {
-                    data_A.push_back(item);
-                } else {
+            for (const auto &item : full_data)
+            {
+                if (item % 2 == 0) { data_A.push_back(item); }
+                else
+                {
                     data_B.push_back(item);
                 }
             }
 
             cout << "  DA: " << data_A.size() << " items (even IPs)" << endl;
             cout << "  DB: " << data_B.size() << " items (odd IPs)" << endl;
-        } else {
+        }
+        else
+        {
             cerr << "Error: Unknown dataset type: " << config.dataset_type << ". Skipping repetition." << endl;
             continue;
         }
 
         // Calculate true frequencies for each dataset
         map<uint64_t, uint64_t> true_freqs_A, true_freqs_B, true_freqs_all;
-        for (const auto &item : data_A) {
+        for (const auto &item : data_A)
+        {
             true_freqs_A[item]++;
             true_freqs_all[item]++;
         }
-        for (const auto &item : data_B) {
+        for (const auto &item : data_B)
+        {
             true_freqs_B[item]++;
             true_freqs_all[item]++;
         }
@@ -336,16 +348,17 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
     // Insert timestamp before file extension
     string output_file = config.output_file;
     uint32_t ext_pos = output_file.find_last_of('.');
-    if (ext_pos != string::npos) {
-        output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos);
-    } else {
+    if (ext_pos != string::npos) { output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos); }
+    else
+    {
         output_file += "_" + timestamp;
     }
 
     export_to_json(output_file, config, rs_config, all_results);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     ConfigParser parser;
     MergeConfig merge_config;
     ReSketchConfig rs_config;
@@ -353,13 +366,15 @@ int main(int argc, char **argv) {
     MergeConfig::add_params_to_config_parser(merge_config, parser);
     ReSketchConfig::add_params_to_config_parser(rs_config, parser);
 
-    if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h")) {
+    if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h"))
+    {
         parser.PrintUsage();
         return 0;
     }
 
     Status s = parser.ParseCommandLine(argc, argv);
-    if (!s.IsOK()) {
+    if (!s.IsOK())
+    {
         fprintf(stderr, "%s\n", s.ToString().c_str());
         return -1;
     }
