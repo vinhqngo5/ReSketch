@@ -27,14 +27,14 @@ run_and_viz() {
         echo "Warning: No JSON output found for ${viz_name}"
     fi
 
-    echo ""
+    echo
     echo "Finished ${exp_name}"
 }
 
 DEFAULT_DAG_FILE="examples/dag/simple_dag.YAML"
 
 help() {
-  echo "Run ReSketch evaluation benchmarks."
+  echo "Run ReSketch experiments with default settings."
   echo
   echo "Syntax: $0 <experiment> [<dag_path>]"
   echo "Experiments:"
@@ -60,7 +60,7 @@ exp="$1"
 dag_file="${2:-$DEFAULT_DAG_FILE}"
 
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-OUTPUT_DIR="output/run_$1_${TIMESTAMP}"
+OUTPUT_DIR="output/run_${exp}_${TIMESTAMP}"
 
 # Activate Python venv if available
 [ -d "venv" ] && source venv/bin/activate
