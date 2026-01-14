@@ -34,21 +34,22 @@ struct MergeConfig
     uint32_t repetitions = 10;
     string dataset_type = "zipf";
     string caida_path = "data/CAIDA/only_ip";
-    uint64_t stream_size = 10000000;
-    uint64_t stream_diversity = 1000000;
+    uint64_t stream_size = 10'000'000;
+    uint64_t stream_diversity = 1'000'000;
     float zipf_param = 1.1;
     string output_file = "output/merge_results.json";
 
     static void add_params_to_config_parser(MergeConfig &config, ConfigParser &parser)
     {
-        parser.AddParameter(new UnsignedInt32Parameter("app.memory_budget_kb", "32", &config.memory_budget_kb, false, "Memory budget in KB per sketch"));
-        parser.AddParameter(new UnsignedInt32Parameter("app.repetitions", "10", &config.repetitions, false, "Number of experiment repetitions"));
-        parser.AddParameter(new StringParameter("app.dataset_type", "zipf", &config.dataset_type, false, "Dataset type: zipf or caida"));
-        parser.AddParameter(new StringParameter("app.caida_path", "data/CAIDA/only_ip", &config.caida_path, false, "Path to CAIDA data file"));
-        parser.AddParameter(new UnsignedInt64Parameter("app.stream_size", "10000000", &config.stream_size, false, "Total stream size (will be split 50-50)"));
-        parser.AddParameter(new UnsignedInt64Parameter("app.stream_diversity", "1000000", &config.stream_diversity, false, "Unique items in stream"));
-        parser.AddParameter(new FloatParameter("app.zipf", "1.1", &config.zipf_param, false, "Zipfian param 'a'"));
-        parser.AddParameter(new StringParameter("app.output_file", "output/merge_results.json", &config.output_file, false, "Output JSON file path"));
+        parser.AddParameter(
+            new UnsignedInt32Parameter("app.memory_budget_kb", to_string(config.memory_budget_kb), &config.memory_budget_kb, false, "Memory budget in KB per sketch"));
+        parser.AddParameter(new UnsignedInt32Parameter("app.repetitions", to_string(config.repetitions), &config.repetitions, false, "Number of experiment repetitions"));
+        parser.AddParameter(new StringParameter("app.dataset_type", config.dataset_type, &config.dataset_type, false, "Dataset type: zipf or caida"));
+        parser.AddParameter(new StringParameter("app.caida_path", config.caida_path, &config.caida_path, false, "Path to CAIDA data file"));
+        parser.AddParameter(new UnsignedInt64Parameter("app.stream_size", to_string(config.stream_size), &config.stream_size, false, "Total stream size (will be split 50-50)"));
+        parser.AddParameter(new UnsignedInt64Parameter("app.stream_diversity", to_string(config.stream_diversity), &config.stream_diversity, false, "Unique items in stream"));
+        parser.AddParameter(new FloatParameter("app.zipf", to_string(config.zipf_param), &config.zipf_param, false, "Zipfian param 'a'"));
+        parser.AddParameter(new StringParameter("app.output_file", config.output_file, &config.output_file, false, "Output JSON file path"));
     }
 
     friend std::ostream &operator<<(std::ostream &os, const MergeConfig &config)
