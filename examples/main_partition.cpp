@@ -13,12 +13,10 @@
 #include <chrono>
 #include <cmath>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <random>
-#include <sstream>
 #include <string>
 #include <sys/stat.h>
 #include <vector>
@@ -54,14 +52,14 @@ struct SplitConfig
     friend ostream &operator<<(ostream &os, const SplitConfig &config)
     {
         os << "\n=== Split Experiment Configuration ===" << endl;
-        os << "Memory Budget: " << config.memory_budget_kb << " KB" << endl;
-        os << "Repetitions: " << config.repetitions << endl;
-        os << "Dataset Type: " << config.dataset_type << endl;
-        if (config.dataset_type == "caida") { os << "CAIDA Path: " << config.caida_path << endl; }
-        os << "Stream Size: " << config.stream_size << endl;
-        os << "Stream Diversity: " << config.stream_diversity << endl;
-        if (config.dataset_type == "zipf") { os << "Zipf Parameter: " << config.zipf_param << endl; }
-        os << "Output File: " << config.output_file << endl;
+        os << format("Memory Budget (per sketch): {} KiB\n", config.memory_budget_kb);
+        os << format("Repetitions: {}\n", config.repetitions);
+        os << format("Dataset: {}\n", config.dataset_type);
+        if (config.dataset_type == "caida") { os << format("CAIDA Path: {}\n", config.caida_path); }
+        os << format("Total Stream Size: {}\n", config.stream_size);
+        os << format("Stream Diversity: {}\n", config.stream_diversity);
+        if (config.dataset_type == "zipf") { os << format("Zipf Parameter: {}\n", config.zipf_param); }
+        os << format("Output File: {}\n", config.output_file);
         return os;
     }
 };
@@ -105,14 +103,10 @@ void export_to_json(const string &filename, const SplitConfig &app_config, const
     json j;
 
     // Metadata section
-    auto now = std::chrono::system_clock::now();
-    auto now_time_t = std::chrono::system_clock::to_time_t(now);
-    std::tm tm_now;
-    gmtime_r(&now_time_t, &tm_now);
-    std::ostringstream timestamp;
-    timestamp << std::put_time(&tm_now, "%Y-%m-%dT%H:%M:%SZ");
+    auto now = chrono::system_clock::now();
+    string timestamp = format("{:%FT%TZ}", chrono::round<chrono::seconds>(now));
 
-    j["metadata"] = {{"experiment_type", "split"}, {"timestamp", timestamp.str()}};
+    j["metadata"] = {{"experiment_type", "split"}, {"timestamp", timestamp}};
 
     // Config section
     j["config"]["experiment"] = {{"memory_budget_kb", app_config.memory_budget_kb}, {"repetitions", results.size()},
@@ -164,14 +158,14 @@ void export_to_json(const string &filename, const SplitConfig &app_config, const
     ofstream out(filename);
     if (!out.is_open())
     {
-        cerr << "Error: Cannot open output file: " << filename << endl;
+        cerr << format("Error: Cannot open output file: {}\n", filename);
         return;
     }
 
     out << j.dump(2);
     out.close();
 
-    cout << "\nResults exported to: " << filename << endl;
+    cout << format("\nResults exported to: {}\n", filename);
 }
 
 void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_config)
@@ -185,13 +179,13 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
     uint32_t memory_bytes = config.memory_budget_kb * 1024;
     uint32_t width = ReSketchV2::calculate_max_width(memory_bytes, rs_config.depth, rs_config.kll_k);
 
-    cout << "\n=== Calculated Width ===" << endl;
-    cout << "Width per sketch: " << width << endl;
+    cout << "\n=== Calculated Width ===\n";
+    cout << format("Width per sketch: {}\n", width);
 
     for (uint32_t rep = 0; rep < config.repetitions; ++rep)
     {
         cout << "\n========================================" << endl;
-        cout << "Repetition " << (rep + 1) << "/" << config.repetitions << endl;
+        cout << format("\n=== Repetition {}/{} ===\n", rep + 1, config.repetitions);
         cout << "========================================" << endl;
 
         SplitResult result;
@@ -227,7 +221,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         }
         else
         {
-            cerr << "Error: Unknown dataset type: " << config.dataset_type << ". Skipping repetition." << endl;
+            cerr << format("Error: Unknown dataset type: {}. Skipping repetition.", config.dataset_type);
             continue;
         }
 
@@ -246,9 +240,9 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
             }
         }
 
-        cout << "  Full dataset: " << full_data.size() << " items" << endl;
-        cout << "  DA (hash < split_point): " << data_A.size() << " items" << endl;
-        cout << "  DB (hash >= split_point): " << data_B.size() << " items" << endl;
+        cout << format("  Full dataset: {} items\n", full_data.size());
+        cout << format("  DA (hash < split_point): {} items\n", data_A.size());
+        cout << format("  DB (hash >= split_point): {} items\n", data_B.size());
 
         // Calculate true frequencies for each dataset
         map<uint64_t, uint64_t> true_freqs_A, true_freqs_B, true_freqs_all;
@@ -263,7 +257,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
             true_freqs_all[item]++;
         }
 
-        cout << "  Unique items: " << true_freqs_A.size() << " (A), " << true_freqs_B.size() << " (B), " << true_freqs_all.size() << " (All)" << endl;
+        cout << format("  Unique items: {} (A), {} (B), {}, (All)\n", true_freqs_A.size(), true_freqs_B.size(), true_freqs_all.size());
 
         // Process Sketch C (full width, processes both A and B)
         cout << "\nProcessing Sketch C (full, A+B)..." << endl;
@@ -274,21 +268,21 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         for (const auto &item : data_B) { sketch_C.update(item); }
         result.sketch_c_full.process_time_s = timer.stop_s();
         result.sketch_c_full.memory_bytes = sketch_C.get_max_memory_usage();
-        cout << "  Time: " << result.sketch_c_full.process_time_s << " s, Memory: " << result.sketch_c_full.memory_bytes / 1024 << " KB" << endl;
+        cout << format("  Time: {} s, Memory: {} KiB\n", result.sketch_c_full.process_time_s, result.sketch_c_full.memory_bytes / 1024);
 
         // Split C into A' and B'
         cout << "\nSplitting Sketch C into A' and B'..." << endl;
         timer.start();
         auto [sketch_A_prime, sketch_B_prime] = ReSketchV2::split(sketch_C, width / 2, width / 2);
         result.split_time_s = timer.stop_s();
-        cout << "  Split time: " << result.split_time_s << " s" << endl;
+        cout << format("  Split time: {} s", result.split_time_s);
 
         // Print partition ranges to verify split
         cout << "  A' partition ranges: ";
-        for (const auto &[start, end] : sketch_A_prime.get_partition_ranges()) { cout << "[" << start << ", " << end << ") "; }
+        for (const auto &[start, end] : sketch_A_prime.get_partition_ranges()) { cout << format("[{}, {}) ", start, end); }
         cout << endl;
         cout << "  B' partition ranges: ";
-        for (const auto &[start, end] : sketch_B_prime.get_partition_ranges()) { cout << "[" << start << ", " << end << ") "; }
+        for (const auto &[start, end] : sketch_B_prime.get_partition_ranges()) { cout << format("[{}, {}) ", start, end); }
         cout << endl;
 
         // Process Sketch A (direct, half width)
@@ -298,7 +292,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         for (const auto &item : data_A) { sketch_A.update(item); }
         result.sketch_a_direct.process_time_s = timer.stop_s();
         result.sketch_a_direct.memory_bytes = sketch_A.get_max_memory_usage();
-        cout << "  Time: " << result.sketch_a_direct.process_time_s << " s, Memory: " << result.sketch_a_direct.memory_bytes / 1024 << " KB" << endl;
+        cout << format("  Time: {} s, Memory: {} KiB", result.sketch_a_direct.process_time_s, result.sketch_a_direct.memory_bytes / 1024);
 
         // Process Sketch B (direct, half width)
         cout << "\nProcessing Sketch B (direct, only B)..." << endl;
@@ -307,7 +301,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         for (const auto &item : data_B) { sketch_B.update(item); }
         result.sketch_b_direct.process_time_s = timer.stop_s();
         result.sketch_b_direct.memory_bytes = sketch_B.get_max_memory_usage();
-        cout << "  Time: " << result.sketch_b_direct.process_time_s << " s, Memory: " << result.sketch_b_direct.memory_bytes / 1024 << " KB" << endl;
+        cout << format("  Time: {} s, Memory: {} KiB", result.sketch_b_direct.process_time_s, result.sketch_b_direct.memory_bytes / 1024);
 
         // Calculate accuracy comparisons
         cout << "\nCalculating accuracy metrics..." << endl;
@@ -365,7 +359,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
             result.a_prime_vs_true_on_da.aae_variance = sum_sq / a_prime_abs_errors.size();
         }
 
-        cout << "  A' (split) on its partition (" << count_a_prime << " items): ARE=" << result.a_prime_vs_true_on_da.are << ", AAE=" << result.a_prime_vs_true_on_da.aae << endl;
+        cout << format("  A' (split) on its partition ({} items): ARE={}, AAE={}\n", count_a_prime, result.a_prime_vs_true_on_da.are, result.a_prime_vs_true_on_da.aae);
 
         result.b_prime_vs_true_on_db.are = count_b_prime > 0 ? total_rel_error_b_prime / count_b_prime : 0.0;
         result.b_prime_vs_true_on_db.aae = count_b_prime > 0 ? total_abs_error_b_prime / count_b_prime : 0.0;
@@ -384,41 +378,35 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
             result.b_prime_vs_true_on_db.aae_variance = sum_sq / b_prime_abs_errors.size();
         }
 
-        cout << "  B' (split) on its partition (" << count_b_prime << " items): ARE=" << result.b_prime_vs_true_on_db.are << ", AAE=" << result.b_prime_vs_true_on_db.aae << endl;
+        cout << format("  B' (split) on its partition ({} items): ARE={}, AAE={}\n", count_b_prime, result.b_prime_vs_true_on_db.are, result.b_prime_vs_true_on_db.aae);
 
         // A (direct) vs true on DA items: baseline
         result.a_vs_true_on_da.are = calculate_are_all_items(sketch_A, true_freqs_A);
         result.a_vs_true_on_da.aae = calculate_aae_all_items(sketch_A, true_freqs_A);
         result.a_vs_true_on_da.are_variance = calculate_are_variance(sketch_A, true_freqs_A, result.a_vs_true_on_da.are);
         result.a_vs_true_on_da.aae_variance = calculate_aae_variance(sketch_A, true_freqs_A, result.a_vs_true_on_da.aae);
-        cout << "  A (direct) vs True on DA: ARE=" << result.a_vs_true_on_da.are << ", AAE=" << result.a_vs_true_on_da.aae << endl;
+        cout << format("  A (direct) vs True on DA: ARE={}, AAE={}\n", result.a_vs_true_on_da.are, result.a_vs_true_on_da.aae);
 
         // B (direct) vs true on DB items: baseline
         result.b_vs_true_on_db.are = calculate_are_all_items(sketch_B, true_freqs_B);
         result.b_vs_true_on_db.aae = calculate_aae_all_items(sketch_B, true_freqs_B);
         result.b_vs_true_on_db.are_variance = calculate_are_variance(sketch_B, true_freqs_B, result.b_vs_true_on_db.are);
         result.b_vs_true_on_db.aae_variance = calculate_aae_variance(sketch_B, true_freqs_B, result.b_vs_true_on_db.aae);
-        cout << "  B (direct) vs True on DB: ARE=" << result.b_vs_true_on_db.are << ", AAE=" << result.b_vs_true_on_db.aae << endl;
+        cout << format("  B (direct) vs True on DB: ARE={}, AAE={}\n", result.b_vs_true_on_db.are, result.b_vs_true_on_db.aae);
 
         // C (full) vs true on all items
         result.c_vs_true_on_all.are = calculate_are_all_items(sketch_C, true_freqs_all);
         result.c_vs_true_on_all.aae = calculate_aae_all_items(sketch_C, true_freqs_all);
         result.c_vs_true_on_all.are_variance = calculate_are_variance(sketch_C, true_freqs_all, result.c_vs_true_on_all.are);
         result.c_vs_true_on_all.aae_variance = calculate_aae_variance(sketch_C, true_freqs_all, result.c_vs_true_on_all.aae);
-        cout << "  C (full) vs True on All: ARE=" << result.c_vs_true_on_all.are << ", AAE=" << result.c_vs_true_on_all.aae << endl;
+        cout << format("  C (full) vs True on All: ARE={}, AAE={}\n", result.c_vs_true_on_all.are, result.c_vs_true_on_all.aae);
 
         all_results.push_back(result);
     }
 
     // Add timestamp to output filename
-    auto now = std::chrono::system_clock::now();
-    auto time_t_now = std::chrono::system_clock::to_time_t(now);
-    std::tm tm_now;
-    localtime_r(&time_t_now, &tm_now);
-
-    std::ostringstream timestamp_stream;
-    timestamp_stream << std::put_time(&tm_now, "%Y%m%d_%H%M%S");
-    string timestamp = timestamp_stream.str();
+    auto now = chrono::system_clock::now();
+    string timestamp = format("{:%FT%TZ}", chrono::round<chrono::seconds>(now));
 
     // Insert timestamp before file extension
     string output_file = config.output_file;
@@ -450,7 +438,7 @@ int main(int argc, char **argv)
     Status s = parser.ParseCommandLine(argc, argv);
     if (!s.IsOK())
     {
-        fprintf(stderr, "%s\n", s.ToString().c_str());
+        cerr << s.ToString();
         return -1;
     }
 
