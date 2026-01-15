@@ -13,12 +13,10 @@
 #include <chrono>
 #include <cmath>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <random>
-#include <sstream>
 #include <string>
 #include <sys/stat.h>
 #include <vector>
@@ -104,14 +102,10 @@ void export_to_json(const string &filename, const MergeConfig &config, const ReS
     json j;
 
     // Metadata section
-    auto now = std::chrono::system_clock::now();
-    auto now_time_t = std::chrono::system_clock::to_time_t(now);
-    std::tm tm_now;
-    gmtime_r(&now_time_t, &tm_now);
-    std::ostringstream timestamp;
-    timestamp << std::put_time(&tm_now, "%Y-%m-%dT%H:%M:%SZ");
+    auto now = chrono::system_clock::now();
+    string timestamp = format("{:%FT%TZ}", chrono::round<chrono::seconds>(now));
 
-    j["metadata"] = {{"experiment_type", "merge"}, {"timestamp", timestamp.str()}};
+    j["metadata"] = {{"experiment_type", "merge"}, {"timestamp", timestamp}};
 
     // Config section
     j["config"]["experiment"] = {{"memory_budget_kb", config.memory_budget_kb}, {"repetitions", config.repetitions},           {"dataset_type", config.dataset_type},
@@ -151,7 +145,6 @@ void export_to_json(const string &filename, const MergeConfig &config, const ReS
                 {"aae", r.d_vs_true_on_all.aae},
                 {"are_variance", r.d_vs_true_on_all.are_variance},
                 {"aae_variance", r.d_vs_true_on_all.aae_variance}}}}}};
-        ;
         j["results"].push_back(rep_json);
     }
 
