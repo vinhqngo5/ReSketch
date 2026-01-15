@@ -55,14 +55,14 @@ struct MergeConfig
     friend std::ostream &operator<<(std::ostream &os, const MergeConfig &config)
     {
         os << "\n=== Merge Experiment Configuration ===\n";
-        os << "Memory Budget (per sketch): " << config.memory_budget_kb << " KB\n";
-        os << "Repetitions: " << config.repetitions << "\n";
-        os << "Dataset: " << config.dataset_type << "\n";
-        if (config.dataset_type == "caida") { os << "CAIDA Path: " << config.caida_path << "\n"; }
-        os << "Total Stream Size: " << config.stream_size << "\n";
-        os << "Stream Diversity: " << config.stream_diversity << "\n";
-        if (config.dataset_type == "zipf") { os << "Zipf Parameter: " << config.zipf_param << "\n"; }
-        os << "Output File: " << config.output_file << "\n";
+        os << format("Memory Budget (per sketch): {} KiB\n", config.memory_budget_kb);
+        os << format("Repetitions: {}\n", config.repetitions);
+        os << format("Dataset: {}\n", config.dataset_type);
+        if (config.dataset_type == "caida") { os << format("CAIDA Path: {}\n", config.caida_path); }
+        os << format("Total Stream Size: {}\n", config.stream_size);
+        os << format("Stream Diversity: {}\n", config.stream_diversity);
+        if (config.dataset_type == "zipf") { os << format("Zipf Parameter: {}\n", config.zipf_param); }
+        os << format("Output File: {}\n", config.output_file);
         return os;
     }
 };
@@ -167,7 +167,7 @@ void export_to_json(const string &filename, const MergeConfig &config, const ReS
     out << j.dump(2);
     out.close();
 
-    cout << "\nResults exported to: " << filename << endl;
+    cout << format("\nResults exported to: {}\n", filename);
 }
 
 void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_config)
@@ -181,11 +181,11 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
     uint64_t memory_budget_bytes = (uint64_t) config.memory_budget_kb * 1024;
     uint32_t width = calculate_width_from_memory_resketch(memory_budget_bytes, rs_config.depth, rs_config.kll_k);
 
-    cout << "\nReSketch Configuration: depth=" << rs_config.depth << ", k=" << rs_config.kll_k << ", width=" << width << endl;
+    cout << format("\nReSketch Configuration: depth={}, k={}, width={}\n", rs_config.depth, rs_config.kll_k, width);
 
     for (uint32_t rep = 0; rep < config.repetitions; ++rep)
     {
-        cout << "\n=== Repetition " << (rep + 1) << "/" << config.repetitions << " ===" << endl;
+        cout << format("\n=== Repetition {}/{} ===\n", rep + 1, config.repetitions);
 
         MergeResult result;
 
@@ -207,8 +207,8 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
             data_B.reserve(data_B_raw.size());
             for (const auto &item : data_B_raw) { data_B.push_back(item + half_diversity); }
 
-            cout << "  DA: " << data_A.size() << " items from range [0, " << (half_diversity - 1) << "]" << endl;
-            cout << "  DB: " << data_B.size() << " items from range [" << half_diversity << ", " << (config.stream_diversity - 1) << "]" << endl;
+            cout << format("  DA: {} items from range [0, {}]\n", data_A.size(), half_diversity - 1);
+            cout << format("  DB: {} items from range [{}, {}]\n", data_B.size(), half_diversity, config.stream_diversity - 1);
         }
         else if (config.dataset_type == "caida")
         {
@@ -234,12 +234,12 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
                 }
             }
 
-            cout << "  DA: " << data_A.size() << " items (even IPs)" << endl;
-            cout << "  DB: " << data_B.size() << " items (odd IPs)" << endl;
+            cout << format("  DA: {} items (even IPs)\n", data_A.size());
+            cout << format("  DB: {}  items (odd IPs)\n", data_B.size());
         }
         else
         {
-            cerr << "Error: Unknown dataset type: " << config.dataset_type << ". Skipping repetition." << endl;
+            cerr << format("Error: Unknown dataset type: {}. Skipping repetition.", config.dataset_type);
             continue;
         }
 
@@ -256,7 +256,7 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
             true_freqs_all[item]++;
         }
 
-        cout << "  Unique items: " << true_freqs_A.size() << " (A), " << true_freqs_B.size() << " (B), " << true_freqs_all.size() << " (All)" << endl;
+        cout << format("  Unique items: {} (A), {} (B), {}, (All)\n", true_freqs_A.size(), true_freqs_B.size(), true_freqs_all.size());
 
         // Generate shared seeds for all sketches to ensure consistent hashing
         std::mt19937_64 rng(std::random_device{}());
@@ -275,7 +275,7 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
         for (const auto &item : data_A) { sketch_A.update(item); }
         result.sketch_a.process_time_s = timer.stop_s();
         result.sketch_a.memory_bytes = sketch_A.get_max_memory_usage();
-        cout << "  Time: " << result.sketch_a.process_time_s << " s, Memory: " << result.sketch_a.memory_bytes / 1024 << " KB" << endl;
+        cout << format("  Time: {} s, Memory: {} KiB\n", result.sketch_a.process_time_s, result.sketch_a.memory_bytes / 1024);
 
         // Process Sketch B
         cout << "\nProcessing Sketch B..." << endl;
@@ -284,7 +284,7 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
         for (const auto &item : data_B) { sketch_B.update(item); }
         result.sketch_b.process_time_s = timer.stop_s();
         result.sketch_b.memory_bytes = sketch_B.get_max_memory_usage();
-        cout << "  Time: " << result.sketch_b.process_time_s << " s, Memory: " << result.sketch_b.memory_bytes / 1024 << " KB" << endl;
+        cout << format("  Time: {} s, Memory: {} KiB\n", result.sketch_b.process_time_s, result.sketch_b.memory_bytes / 1024);
 
         // Merge A and B into C
         cout << "\nMerging Sketch A and B into C..." << endl;
@@ -292,7 +292,7 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
         ReSketchV2 sketch_C = ReSketchV2::merge(sketch_A, sketch_B);
         result.merge_time_s = timer.stop_s();
         result.sketch_c_merged.memory_bytes = sketch_C.get_max_memory_usage();
-        cout << "  Merge time: " << result.merge_time_s << " s, Memory: " << result.sketch_c_merged.memory_bytes / 1024 << " KB" << endl;
+        cout << format("  Merge time: {} s, Memory: {} KiB\n", result.merge_time_s, result.sketch_c_merged.memory_bytes / 1024);
 
         // Process Ground Truth Sketch D
         cout << "\nProcessing Ground Truth Sketch D..." << endl;
@@ -302,7 +302,7 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
         for (const auto &item : data_B) { sketch_D.update(item); }
         result.sketch_d_ground_truth.process_time_s = timer.stop_s();
         result.sketch_d_ground_truth.memory_bytes = sketch_D.get_max_memory_usage();
-        cout << "  Time: " << result.sketch_d_ground_truth.process_time_s << " s, Memory: " << result.sketch_d_ground_truth.memory_bytes / 1024 << " KB" << endl;
+        cout << format("  Time: {} s, Memory: {} KiB\n", result.sketch_d_ground_truth.process_time_s, result.sketch_d_ground_truth.memory_bytes / 1024);
 
         // Calculate accuracy comparisons
         cout << "\nCalculating accuracy metrics..." << endl;
@@ -312,41 +312,35 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
         result.a_vs_true_on_da.aae = calculate_aae_all_items(sketch_A, true_freqs_A);
         result.a_vs_true_on_da.are_variance = calculate_are_variance(sketch_A, true_freqs_A, result.a_vs_true_on_da.are);
         result.a_vs_true_on_da.aae_variance = calculate_aae_variance(sketch_A, true_freqs_A, result.a_vs_true_on_da.aae);
-        cout << "  A vs True on DA: ARE=" << result.a_vs_true_on_da.are << ", AAE=" << result.a_vs_true_on_da.aae << endl;
+        cout << format("  A vs True on DA: ARE={}, AAE={}\n", result.a_vs_true_on_da.are, result.a_vs_true_on_da.aae);
 
         // B vs true on DB items: How accurate is sketch B?
         result.b_vs_true_on_db.are = calculate_are_all_items(sketch_B, true_freqs_B);
         result.b_vs_true_on_db.aae = calculate_aae_all_items(sketch_B, true_freqs_B);
         result.b_vs_true_on_db.are_variance = calculate_are_variance(sketch_B, true_freqs_B, result.b_vs_true_on_db.are);
         result.b_vs_true_on_db.aae_variance = calculate_aae_variance(sketch_B, true_freqs_B, result.b_vs_true_on_db.aae);
-        cout << "  B vs True on DB: ARE=" << result.b_vs_true_on_db.are << ", AAE=" << result.b_vs_true_on_db.aae << endl;
+        cout << format("  B vs True on DB: ARE={}, AAE={}\n", result.b_vs_true_on_db.are, result.b_vs_true_on_db.aae);
 
         // C (merged) vs true on all items: How accurate is the merged sketch?
         result.c_vs_true_on_all.are = calculate_are_all_items(sketch_C, true_freqs_all);
         result.c_vs_true_on_all.aae = calculate_aae_all_items(sketch_C, true_freqs_all);
         result.c_vs_true_on_all.are_variance = calculate_are_variance(sketch_C, true_freqs_all, result.c_vs_true_on_all.are);
         result.c_vs_true_on_all.aae_variance = calculate_aae_variance(sketch_C, true_freqs_all, result.c_vs_true_on_all.aae);
-        cout << "  C (merged) vs True on All: ARE=" << result.c_vs_true_on_all.are << ", AAE=" << result.c_vs_true_on_all.aae << endl;
+        cout << format("  C (merged) vs True on All: ARE={}, AAE={}\n", result.c_vs_true_on_all.are, result.c_vs_true_on_all.aae);
 
         // D (ground truth) vs true on all items: How accurate is the double-width sketch?
         result.d_vs_true_on_all.are = calculate_are_all_items(sketch_D, true_freqs_all);
         result.d_vs_true_on_all.aae = calculate_aae_all_items(sketch_D, true_freqs_all);
         result.d_vs_true_on_all.are_variance = calculate_are_variance(sketch_D, true_freqs_all, result.d_vs_true_on_all.are);
         result.d_vs_true_on_all.aae_variance = calculate_aae_variance(sketch_D, true_freqs_all, result.d_vs_true_on_all.aae);
-        cout << "  D (ground truth) vs True on All: ARE=" << result.d_vs_true_on_all.are << ", AAE=" << result.d_vs_true_on_all.aae << endl;
+        cout << format("  D (ground truth) vs True on All: ARE={}, AAE={}\n", result.d_vs_true_on_all.are, result.d_vs_true_on_all.aae);
 
         all_results.push_back(result);
     }
 
     // Add timestamp to output filename
-    auto now = std::chrono::system_clock::now();
-    auto time_t_now = std::chrono::system_clock::to_time_t(now);
-    std::tm tm_now;
-    localtime_r(&time_t_now, &tm_now);
-
-    std::ostringstream timestamp_stream;
-    timestamp_stream << std::put_time(&tm_now, "%Y%m%d_%H%M%S");
-    string timestamp = timestamp_stream.str();
+    auto now = chrono::system_clock::now();
+    string timestamp = format("{:%FT%TZ}", chrono::round<chrono::seconds>(now));
 
     // Insert timestamp before file extension
     string output_file = config.output_file;
