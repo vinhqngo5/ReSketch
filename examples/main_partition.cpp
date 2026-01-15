@@ -35,6 +35,7 @@ struct SplitConfig
     string caida_path = "data/CAIDA/only_ip";
     uint64_t stream_size = 10000000;
     uint64_t stream_diversity = 1000000;
+    uint64_t stream_size = 10'000'000;
     float zipf_param = 1.1;
     string output_file = "output/split_results.json";
 

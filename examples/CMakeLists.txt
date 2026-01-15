@@ -14,8 +14,8 @@ target_link_libraries(sensitivity_experiment PRIVATE experiment_common)
 add_executable(merge_experiment main_merge.cpp)
 target_link_libraries(merge_experiment PRIVATE experiment_common)
 
-add_executable(split_experiment main_split.cpp)
-target_link_libraries(split_experiment PRIVATE experiment_common)
+add_executable(partition_experiment main_partition.cpp)
+target_link_libraries(partition_experiment PRIVATE experiment_common)
 
 add_executable(shrinking_experiment main_shrinking.cpp)
 target_link_libraries(shrinking_experiment PRIVATE experiment_common)
