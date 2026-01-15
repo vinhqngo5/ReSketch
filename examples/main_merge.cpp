@@ -152,7 +152,7 @@ void export_to_json(const string &filename, const MergeConfig &config, const ReS
     ofstream out(filename);
     if (!out.is_open())
     {
-        cerr << "Error: Cannot open output file: " << filename << endl;
+        cerr << format("Error: Cannot open output file: {}\n", filename);
         return;
     }
 
@@ -227,7 +227,7 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
             }
 
             cout << format("  DA: {} items (even IPs)\n", data_A.size());
-            cout << format("  DB: {}  items (odd IPs)\n", data_B.size());
+            cout << format("  DB: {} items (odd IPs)\n", data_B.size());
         }
         else
         {
@@ -364,7 +364,7 @@ int main(int argc, char **argv)
     Status s = parser.ParseCommandLine(argc, argv);
     if (!s.IsOK())
     {
-        fprintf(stderr, "%s\n", s.ToString().c_str());
+        cerr << s.ToString();
         return -1;
     }
 
