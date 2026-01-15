@@ -1,0 +1,5 @@
+# Ignore vendored dependencies
+3rd/*
+src/frequency_summary/geometric_sketch/*
+src/hash/*
+src/utils/*

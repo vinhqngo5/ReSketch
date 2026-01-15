@@ -1,5 +1,14 @@
-#define DOCTEST_CONFIG_IMPLEMENT
-#include "doctest.h"
+#include "frequency_summary/frequency_summary_config.hpp"
+
+#include "frequency_summary/count_min_sketch.hpp"
+#include "frequency_summary/dynamic_sketch_wrapper.hpp"
+#include "frequency_summary/geometric_sketch_wrapper.hpp"
+#include "frequency_summary/resketchv2.hpp"
+#include "common.hpp"
+
+#include "utils/ConfigParser.hpp"
+
+#include <json/json.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -9,36 +18,18 @@
 #include <iostream>
 #include <map>
 #include <memory>
-#include <numeric>
 #include <random>
 #include <sstream>
 #include <string>
 #include <sys/stat.h>
 #include <vector>
 
-// JSON Library
-#include "json/json.hpp"
-
-// Utils
-#include "utils/ConfigParser.hpp"
-
-// Sketch Headers
-#include "frequency_summary/count_min_sketch.hpp"
-#include "frequency_summary/dynamic_sketch_wrapper.hpp"
-#include "frequency_summary/geometric_sketch_wrapper.hpp"
-#include "frequency_summary/resketchv2.hpp"
-
-// Config Headers
-#include "frequency_summary/frequency_summary_config.hpp"
-
-// Common utilities
-#include "common.hpp"
-
 using namespace std;
 using json = nlohmann::json;
 
 // Expansion Experiment Config
-struct ExpansionConfig {
+struct ExpansionConfig
+{
     uint32_t initial_memory_kb = 32;
     uint32_t expansion_interval = 100000;
     uint32_t memory_increment_kb = 32;
@@ -51,7 +42,8 @@ struct ExpansionConfig {
     float zipf_param = 1.1;
     string output_file = "output/expansion_results.json";
 
-    static void add_params_to_config_parser(ExpansionConfig &config, ConfigParser &parser) {
+    static void add_params_to_config_parser(ExpansionConfig &config, ConfigParser &parser)
+    {
         parser.AddParameter(new UnsignedInt32Parameter("app.initial_memory_kb", "32", &config.initial_memory_kb, false, "Initial memory budget in KB"));
         parser.AddParameter(new UnsignedInt32Parameter("app.expansion_interval", "100000", &config.expansion_interval, false, "Items between expansions"));
         parser.AddParameter(new UnsignedInt32Parameter("app.memory_increment_kb", "32", &config.memory_increment_kb, false, "Memory increment per expansion in KB"));
@@ -65,7 +57,8 @@ struct ExpansionConfig {
         parser.AddParameter(new StringParameter("app.output_file", "output/expansion_results.json", &config.output_file, false, "Output JSON file path"));
     }
 
-    friend std::ostream &operator<<(std::ostream &os, const ExpansionConfig &config) {
+    friend std::ostream &operator<<(std::ostream &os, const ExpansionConfig &config)
+    {
         os << "\n=== Expansion Experiment Configuration ===\n";
         os << "Initial Memory: " << config.initial_memory_kb << " KB\n";
         os << "Expansion Interval: " << config.expansion_interval << " items\n";
@@ -75,7 +68,8 @@ struct ExpansionConfig {
         if (config.dataset_type == "caida") { os << "CAIDA Path: " << config.caida_path << "\n"; }
         os << "Total Items to Process: " << config.total_items << "\n";
         os << "Dataset Size: " << config.stream_size << "\n";
-        if (config.dataset_type == "zipf") {
+        if (config.dataset_type == "zipf")
+        {
             os << "Stream Diversity: " << config.stream_diversity << "\n";
             os << "Zipf Parameter: " << config.zipf_param << "\n";
         }
@@ -85,7 +79,8 @@ struct ExpansionConfig {
 };
 
 // Checkpoint data
-struct Checkpoint {
+struct Checkpoint
+{
     uint64_t items_processed;
     double throughput_mops;
     double query_throughput_mops;
@@ -96,8 +91,10 @@ struct Checkpoint {
     double aae_variance;
 };
 
-void export_to_json(const string &filename, const ExpansionConfig &config, const CountMinConfig &cm_config, const ReSketchConfig &rs_config, const GeometricSketchConfig &gs_config,
-                    const DynamicSketchConfig &ds_config, const map<string, vector<vector<Checkpoint>>> &all_results) {
+void export_to_json(
+    const string &filename, const ExpansionConfig &config, const CountMinConfig &cm_config, const ReSketchConfig &rs_config, const GeometricSketchConfig &gs_config,
+    const DynamicSketchConfig &ds_config, const map<string, vector<vector<Checkpoint>>> &all_results)
+{
     create_directory(filename);
 
     // Build JSON object
@@ -114,15 +111,16 @@ void export_to_json(const string &filename, const ExpansionConfig &config, const
     j["metadata"] = {{"experiment_type", "expansion"}, {"timestamp", timestamp.str()}};
 
     // Config section
-    j["config"]["experiment"] = {{"initial_memory_kb", config.initial_memory_kb},
-                                 {"expansion_interval", config.expansion_interval},
-                                 {"memory_increment_kb", config.memory_increment_kb},
-                                 {"repetitions", config.repetitions},
-                                 {"dataset_type", config.dataset_type},
-                                 {"total_items", config.total_items},
-                                 {"stream_size", config.stream_size},
-                                 {"stream_diversity", config.stream_diversity},
-                                 {"zipf_param", config.zipf_param}};
+    j["config"]["experiment"] = {
+        {"initial_memory_kb", config.initial_memory_kb},
+        {"expansion_interval", config.expansion_interval},
+        {"memory_increment_kb", config.memory_increment_kb},
+        {"repetitions", config.repetitions},
+        {"dataset_type", config.dataset_type},
+        {"total_items", config.total_items},
+        {"stream_size", config.stream_size},
+        {"stream_diversity", config.stream_diversity},
+        {"zipf_param", config.zipf_param}};
 
     j["config"]["base_sketch_config"]["countmin"] = {{"depth", cm_config.depth}};
     j["config"]["base_sketch_config"]["resketch"] = {{"depth", rs_config.depth}, {"kll_k", rs_config.kll_k}};
@@ -131,23 +129,27 @@ void export_to_json(const string &filename, const ExpansionConfig &config, const
 
     // Results section
     json results_json;
-    for (const auto &[sketch_name, repetitions] : all_results) {
+    for (const auto &[sketch_name, repetitions] : all_results)
+    {
         json sketch_reps = json::array();
 
-        for (uint32_t rep = 0; rep < repetitions.size(); ++rep) {
+        for (uint32_t rep = 0; rep < repetitions.size(); ++rep)
+        {
             json rep_json;
             rep_json["repetition_id"] = rep;
 
             json checkpoints_array = json::array();
-            for (const auto &cp : repetitions[rep]) {
-                json cp_json = {{"items_processed", cp.items_processed},
-                                {"memory_bytes", cp.memory_kb * 1024},
-                                {"throughput_mops", cp.throughput_mops},
-                                {"query_throughput_mops", cp.query_throughput_mops},
-                                {"are", cp.are},
-                                {"aae", cp.aae},
-                                {"are_variance", cp.are_variance},
-                                {"aae_variance", cp.aae_variance}};
+            for (const auto &cp : repetitions[rep])
+            {
+                json cp_json = {
+                    {"items_processed", cp.items_processed},
+                    {"memory_bytes", cp.memory_kb * 1024},
+                    {"throughput_mops", cp.throughput_mops},
+                    {"query_throughput_mops", cp.query_throughput_mops},
+                    {"are", cp.are},
+                    {"aae", cp.aae},
+                    {"are_variance", cp.are_variance},
+                    {"aae_variance", cp.aae_variance}};
                 checkpoints_array.push_back(cp_json);
             }
 
@@ -162,7 +164,8 @@ void export_to_json(const string &filename, const ExpansionConfig &config, const
 
     // Write to file
     ofstream out(filename);
-    if (!out.is_open()) {
+    if (!out.is_open())
+    {
         cerr << "Error: Cannot open output file: " << filename << endl;
         return;
     }
@@ -173,8 +176,9 @@ void export_to_json(const string &filename, const ExpansionConfig &config, const
     cout << "\nResults exported to: " << filename << endl;
 }
 
-void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfig &cm_config, const ReSketchConfig &rs_config, const GeometricSketchConfig &gs_config,
-                              const DynamicSketchConfig &ds_config) {
+void run_expansion_experiment(
+    const ExpansionConfig &config, const CountMinConfig &cm_config, const ReSketchConfig &rs_config, const GeometricSketchConfig &gs_config, const DynamicSketchConfig &ds_config)
+{
     cout << config << endl;
     cout << cm_config << endl;
     cout << rs_config << endl;
@@ -188,22 +192,29 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
     all_results["DynamicSketch"] = vector<vector<Checkpoint>>(config.repetitions);
     all_results["GeometricSketch"] = vector<vector<Checkpoint>>(config.repetitions);
 
-    for (uint32_t rep = 0; rep < config.repetitions; ++rep) {
+    for (uint32_t rep = 0; rep < config.repetitions; ++rep)
+    {
         cout << "\n=== Repetition " << (rep + 1) << "/" << config.repetitions << " ===" << endl;
 
         // Generate or load base dataset
         vector<uint64_t> base_data;
-        if (config.dataset_type == "zipf") {
+        if (config.dataset_type == "zipf")
+        {
             cout << "Generating Zipf data..." << endl;
             base_data = generate_zipf_data(config.stream_size, config.stream_diversity, config.zipf_param);
-        } else if (config.dataset_type == "caida") {
+        }
+        else if (config.dataset_type == "caida")
+        {
             cout << "Reading CAIDA data..." << endl;
             base_data = read_caida_data(config.caida_path, config.stream_size);
-            if (base_data.empty()) {
+            if (base_data.empty())
+            {
                 cerr << "Error: Failed to read CAIDA data. Skipping repetition." << endl;
                 continue;
             }
-        } else {
+        }
+        else
+        {
             cerr << "Error: Unknown dataset type: " << config.dataset_type << ". Skipping repetition." << endl;
             continue;
         }
@@ -253,7 +264,8 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
         uint64_t items_processed = 0;
         uint32_t checkpoint_idx = 0;
 
-        while (items_processed < config.total_items) {
+        while (items_processed < config.total_items)
+        {
             uint64_t chunk_size = min((uint64_t) config.expansion_interval, config.total_items - items_processed);
             uint64_t chunk_start = items_processed;
             uint64_t chunk_end = chunk_start + chunk_size;
@@ -389,12 +401,14 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
                  << ", AAE=" << ds_cp.aae << endl;
 
             // Expand sketches if not at end
-            if (items_processed < config.total_items) {
+            if (items_processed < config.total_items)
+            {
                 // CountMin: cannot expand (do nothing)
 
                 // ReSketch: expand by memory_increment_kb
                 uint32_t rs_new_width = calculate_width_from_memory_resketch(rs_sketch.get_max_memory_usage() + memory_increment_bytes, rs_config.depth, rs_config.kll_k);
-                if (rs_new_width > rs_width) {
+                if (rs_new_width > rs_width)
+                {
                     rs_sketch.expand(rs_new_width);
                     rs_width = rs_new_width;
                     cout << "  -> ReSketch expanded to width " << rs_width << endl;
@@ -402,7 +416,8 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
 
                 // GeometricSketch: expand by memory_increment_kb
                 uint32_t gs_new_width = calculate_width_from_memory_geometric(gs_sketch.get_max_memory_usage() + memory_increment_bytes, gs_config.depth);
-                if (gs_new_width > gs_width) {
+                if (gs_new_width > gs_width)
+                {
                     gs_sketch.expand(gs_new_width);
                     gs_width = gs_new_width;
                     cout << "  -> GeometricSketch expanded to width " << gs_width << endl;
@@ -411,9 +426,11 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
                 // DynamicSketch: accumulate budget until we can double
                 ds_accumulated_budget += memory_increment_bytes;
                 // Check if accumulated budget is enough to double the last expansion size
-                if (ds_accumulated_budget >= ds_last_expansion_size) {
+                if (ds_accumulated_budget >= ds_last_expansion_size)
+                {
                     uint32_t ds_new_width = calculate_width_from_memory_dynamic(ds_sketch.get_max_memory_usage() + ds_last_expansion_size, ds_config.depth);
-                    if (ds_new_width > ds_width) {
+                    if (ds_new_width > ds_width)
+                    {
                         ds_sketch.expand(ds_new_width);
                         cout << "  -> DynamicSketch expanded to width " << ds_new_width << " (added " << (ds_last_expansion_size / 1024)
                              << " KB, accumulated budget: " << (ds_accumulated_budget / 1024) << " KB)" << endl;
@@ -441,16 +458,17 @@ void run_expansion_experiment(const ExpansionConfig &config, const CountMinConfi
     // Insert timestamp before file extension
     string output_file = config.output_file;
     uint32_t ext_pos = output_file.find_last_of('.');
-    if (ext_pos != string::npos) {
-        output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos);
-    } else {
+    if (ext_pos != string::npos) { output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos); }
+    else
+    {
         output_file += "_" + timestamp;
     }
 
     export_to_json(output_file, config, cm_config, rs_config, gs_config, ds_config, all_results);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     ConfigParser parser;
     ExpansionConfig exp_config;
     CountMinConfig cm_config;
@@ -464,13 +482,15 @@ int main(int argc, char **argv) {
     GeometricSketchConfig::add_params_to_config_parser(gs_config, parser);
     DynamicSketchConfig::add_params_to_config_parser(ds_config, parser);
 
-    if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h")) {
+    if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h"))
+    {
         parser.PrintUsage();
         return 0;
     }
 
     Status s = parser.ParseCommandLine(argc, argv);
-    if (!s.IsOK()) {
+    if (!s.IsOK())
+    {
         fprintf(stderr, "%s\n", s.ToString().c_str());
         return -1;
     }

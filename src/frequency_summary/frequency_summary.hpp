@@ -2,14 +2,15 @@
 
 #include <cstdint>
 
-class FrequencySummary {
-  public:
+class FrequencySummary
+{
+public:
     virtual ~FrequencySummary() = default;
 
     virtual void update(uint64_t item) = 0;
 
     virtual double estimate(uint64_t item) const = 0;
 
-  protected:
+protected:
     FrequencySummary() = default;
 };

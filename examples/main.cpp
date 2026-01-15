@@ -1,8 +1,15 @@
-#define DOCTEST_CONFIG_IMPLEMENT
-#include "doctest.h"
+#include "frequency_summary/frequency_summary_config.hpp"
+#include "quantile_summary/quantile_summary_config.hpp"
 
-#include <algorithm>
-#include <chrono>
+#include "frequency_summary/count_min_sketch.hpp"
+#include "frequency_summary/dynamic_sketch_wrapper.hpp"
+#include "frequency_summary/geometric_sketch_wrapper.hpp"
+#include "frequency_summary/resketch.hpp"
+#include "frequency_summary/resketchv2.hpp"
+#include "common.hpp"
+
+#include "utils/ConfigParser.hpp"
+
 #include <cmath>
 #include <iomanip>
 #include <iostream>
@@ -12,38 +19,23 @@
 #include <string>
 #include <vector>
 
-// Common utilities
-#include "common.hpp"
-
-// Utils
-#include "utils/ConfigParser.hpp"
-
-// Sketch Headers
-#include "frequency_summary/count_min_sketch.hpp"
-#include "frequency_summary/dynamic_sketch_wrapper.hpp"
-#include "frequency_summary/geometric_sketch_wrapper.hpp"
-#include "frequency_summary/resketch.hpp"
-#include "frequency_summary/resketchv2.hpp"
-#include "quantile_summary/kll.hpp"
-
-// Config Headers
-#include "frequency_summary/frequency_summary_config.hpp"
-#include "quantile_summary/quantile_summary_config.hpp"
-
 using namespace std;
 
 // App Config
-struct AppConfig {
+struct AppConfig
+{
     uint64_t stream_size = 1000000;
     uint64_t stream_diversity = 10000;
     float zipf_param = 1.1;
 
-    static void add_params_to_config_parser(AppConfig &config, ConfigParser &parser) {
+    static void add_params_to_config_parser(AppConfig &config, ConfigParser &parser)
+    {
         parser.AddParameter(new UnsignedInt64Parameter("app.stream_size", "1000000", &config.stream_size, false, "Total items in stream"));
         parser.AddParameter(new UnsignedInt64Parameter("app.stream_diversity", "10000", &config.stream_diversity, false, "Unique items in stream"));
         parser.AddParameter(new FloatParameter("app.zipf", "1.1", &config.zipf_param, false, "Zipfian param 'a'"));
     }
-    friend std::ostream &operator<<(std::ostream &os, const AppConfig &config) {
+    friend std::ostream &operator<<(std::ostream &os, const AppConfig &config)
+    {
         ConfigPrinter<AppConfig>::print(os, config);
         return os;
     }
@@ -51,7 +43,8 @@ struct AppConfig {
 };
 
 // Evaluation result structure
-struct EvaluationResult {
+struct EvaluationResult
+{
     string name;
     double aae_top100 = 0.0, are_top100 = 0.0;
     double aae_top1k = 0.0, are_top1k = 0.0;
@@ -60,11 +53,13 @@ struct EvaluationResult {
     uint32_t memory_kb = 0;
 
     template <typename SketchType>
-    void calculate_error_for(const SketchType &sketch, const map<uint64_t, uint64_t> &true_freqs, const vector<uint64_t> &items, double &out_aae, double &out_are) {
+    void calculate_error_for(const SketchType &sketch, const map<uint64_t, uint64_t> &true_freqs, const vector<uint64_t> &items, double &out_aae, double &out_are)
+    {
         if (items.empty()) return;
         double total_abs_error = 0;
         double total_rel_error = 0;
-        for (const auto &item : items) {
+        for (const auto &item : items)
+        {
             double est_freq = sketch.estimate(item);
             double true_freq = true_freqs.at(item);
             double abs_error = abs(est_freq - true_freq);
@@ -76,12 +71,14 @@ struct EvaluationResult {
     }
 };
 
-void print_results(const string &title, const vector<EvaluationResult> &results) {
+void print_results(const string &title, const vector<EvaluationResult> &results)
+{
     cout << "\n--- " << title << " ---\n\n";
     cout << "+--------------------------+----------+------------+------------+-----------+-----------+-----------+------------+------------+" << endl;
     cout << "| Sketch Name              | Mem (KB) | Tput(Mops) | AAE Top100 | ARE Top100| AAE Top1K | ARE Top1K |    AAE All |    ARE All |" << endl;
     cout << "+--------------------------+----------+------------+------------+-----------+-----------+-----------+------------+------------+" << endl;
-    for (const auto &res : results) {
+    for (const auto &res : results)
+    {
         cout << "| " << left << setw(24) << res.name << "| " << right << setw(8) << res.memory_kb << " | " << setw(10) << fixed << setprecision(2) << res.throughput << " | "
              << setw(10) << fixed << setprecision(2) << res.aae_top100 << " | " << setw(8) << fixed << setprecision(2) << res.are_top100 * 100.0 << "%"
              << " | " << setw(9) << fixed << setprecision(2) << res.aae_top1k << " | " << setw(8) << fixed << setprecision(2) << res.are_top1k * 100.0 << "%"
@@ -91,8 +88,10 @@ void print_results(const string &title, const vector<EvaluationResult> &results)
 }
 
 template <typename SketchType>
-EvaluationResult evaluate(const string &name, const SketchType &sketch, const map<uint64_t, uint64_t> &true_freqs, const vector<uint64_t> &top100, const vector<uint64_t> &top1k,
-                          const vector<uint64_t> &all_unique, double duration_s, uint32_t stream_size) {
+EvaluationResult evaluate(
+    const string &name, const SketchType &sketch, const map<uint64_t, uint64_t> &true_freqs, const vector<uint64_t> &top100, const vector<uint64_t> &top1k,
+    const vector<uint64_t> &all_unique, double duration_s, uint32_t stream_size)
+{
     EvaluationResult res;
     res.name = name;
     res.memory_kb = sketch.get_max_memory_usage() / 1024;
@@ -104,7 +103,8 @@ EvaluationResult evaluate(const string &name, const SketchType &sketch, const ma
     return res;
 }
 
-void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig kll_conf, ReSketchConfig rs_conf, GeometricSketchConfig gs_conf, DynamicSketchConfig ds_conf) {
+void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig kll_conf, ReSketchConfig rs_conf, GeometricSketchConfig gs_conf, DynamicSketchConfig ds_conf)
+{
     vector<EvaluationResult> results;
     Timer timer;
 
@@ -328,8 +328,9 @@ void scenario_2_resize(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig 
     print_results("SCENARIO 2: DYNAMIC RESIZING", results);
 }
 
-void scenario_frequency_comparison(const AppConfig &conf, CountMinConfig cm_conf, KLLConfig kll_conf, ReSketchConfig rs_conf, GeometricSketchConfig gs_conf,
-                                   DynamicSketchConfig ds_conf) {
+void scenario_frequency_comparison(
+    const AppConfig &conf, CountMinConfig cm_conf, KLLConfig kll_conf, ReSketchConfig rs_conf, GeometricSketchConfig gs_conf, DynamicSketchConfig ds_conf)
+{
     Timer timer;
 
     cout << "\nGenerating data for frequency comparison..." << endl;
@@ -349,7 +350,8 @@ void scenario_frequency_comparison(const AppConfig &conf, CountMinConfig cm_conf
 
     // Update all sketches with the data
     cout << "Updating sketches..." << endl;
-    for (const auto &item : data) {
+    for (const auto &item : data)
+    {
         cm.update(item);
         kll.update(item);
         rs.update(item);
@@ -366,7 +368,8 @@ void scenario_frequency_comparison(const AppConfig &conf, CountMinConfig cm_conf
     print_frequency_comparison("Random 100 Items", random100, true_freqs, sketch_names, cm, kll, rs, rs_v2, gs, ds);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     ConfigParser parser;
     AppConfig app_configs;
     CountMinConfig count_min_configs;
@@ -382,17 +385,20 @@ int main(int argc, char **argv) {
     GeometricSketchConfig::add_params_to_config_parser(geometric_sketch_configs, parser);
     DynamicSketchConfig::add_params_to_config_parser(dynamic_sketch_configs, parser);
 
-    if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h")) {
+    if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h"))
+    {
         parser.PrintUsage();
         return 0;
     }
-    if (argc > 1 && (string(argv[1]) == "--generate-doc")) {
+    if (argc > 1 && (string(argv[1]) == "--generate-doc"))
+    {
         parser.PrintMarkdown();
         return 0;
     }
 
     Status s = parser.ParseCommandLine(argc, argv);
-    if (!s.IsOK()) {
+    if (!s.IsOK())
+    {
         fprintf(stderr, "%s\n", s.ToString().c_str());
         return -1;
     }

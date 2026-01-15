@@ -1,42 +1,31 @@
-#define DOCTEST_CONFIG_IMPLEMENT
-#include "doctest.h"
+#include "frequency_summary/frequency_summary_config.hpp"
+
+#include "frequency_summary/count_min_sketch.hpp"
+#include "frequency_summary/resketchv2.hpp"
+#include "common.hpp"
+
+#include "utils/ConfigParser.hpp"
+
+#include <json/json.hpp>
 
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <map>
 #include <memory>
-#include <numeric>
 #include <random>
-#include <sstream>
 #include <string>
 #include <sys/stat.h>
 #include <vector>
-
-// JSON Library
-#include "json/json.hpp"
-
-// Utils
-#include "utils/ConfigParser.hpp"
-
-// Sketch Headers
-#include "frequency_summary/count_min_sketch.hpp"
-#include "frequency_summary/resketchv2.hpp"
-
-// Config Headers
-#include "frequency_summary/frequency_summary_config.hpp"
-
-// Common utilities
-#include "common.hpp"
 
 using namespace std;
 using json = nlohmann::json;
 
 // Sensitivity Experiment Config
-struct SensitivityConfig {
+struct SensitivityConfig
+{
     uint32_t repetitions = 5;
     string dataset_type = "zipf";   // "zipf" or "caida"
     string caida_path = "data/CAIDA/only_ip";
@@ -53,21 +42,25 @@ struct SensitivityConfig {
     // depth values to test for ReSketch
     vector<uint32_t> depth_values = {1, 2, 3, 4, 5, 6, 7, 8};
 
-    static void add_params_to_config_parser(SensitivityConfig &config, ConfigParser &parser) {
+    static void add_params_to_config_parser(SensitivityConfig &config, ConfigParser &parser)
+    {
         parser.AddParameter(new UnsignedInt32Parameter("app.repetitions", to_string(config.repetitions), &config.repetitions, false, "Number of experiment repetitions"));
         parser.AddParameter(new StringParameter("app.dataset_type", config.dataset_type, &config.dataset_type, false, "Dataset type: zipf or caida"));
         parser.AddParameter(new StringParameter("app.caida_path", config.caida_path, &config.caida_path, false, "Path to CAIDA data file"));
         parser.AddParameter(new UnsignedInt64Parameter("app.total_items", to_string(config.total_items), &config.total_items, false, "Total items to process"));
         parser.AddParameter(new UnsignedInt64Parameter("app.stream_size", to_string(config.stream_size), &config.stream_size, false, "Dataset size for zipf generation"));
-        parser.AddParameter(new UnsignedInt64Parameter("app.stream_diversity", to_string(config.stream_diversity), &config.stream_diversity, false, "Unique items in stream (zipf)"));
+        parser.AddParameter(
+            new UnsignedInt64Parameter("app.stream_diversity", to_string(config.stream_diversity), &config.stream_diversity, false, "Unique items in stream (zipf)"));
         parser.AddParameter(new FloatParameter("app.zipf", to_string(config.zipf_param), &config.zipf_param, false, "Zipfian param 'a'"));
         parser.AddParameter(new StringParameter("app.output_file", config.output_file, &config.output_file, false, "Output JSON file path"));
     }
 
-    friend std::ostream &operator<<(std::ostream &os, const SensitivityConfig &config) {
+    friend std::ostream &operator<<(std::ostream &os, const SensitivityConfig &config)
+    {
         os << "\n=== Sensitivity Experiment Configuration ===\n";
         os << "Memory budgets (KiB): ";
-        for (uint32_t i = 0; i < config.memory_budgets_kb.size(); ++i) {
+        for (uint32_t i = 0; i < config.memory_budgets_kb.size(); ++i)
+        {
             os << config.memory_budgets_kb[i];
             if (i < config.memory_budgets_kb.size() - 1) os << ", ";
         }
@@ -77,18 +70,21 @@ struct SensitivityConfig {
         if (config.dataset_type == "caida") { os << format("CAIDA Path: {}\n", config.caida_path); }
         os << format("Total Items: {}\n", config.total_items);
         os << format("Dataset Size: {}\n", config.stream_size);
-        if (config.dataset_type == "zipf") {
+        if (config.dataset_type == "zipf")
+        {
             os << format("Stream Diversity: {}\n", config.stream_diversity);
             os << format("Zipf Parameter: {}\n", config.zipf_param);
         }
         os << "ReSketch K values: ";
-        for (uint32_t i = 0; i < config.k_values.size(); ++i) {
+        for (uint32_t i = 0; i < config.k_values.size(); ++i)
+        {
             os << config.k_values[i];
             if (i < config.k_values.size() - 1) os << ", ";
         }
         os << "\n";
         os << "ReSketch Depth values: ";
-        for (uint32_t i = 0; i < config.depth_values.size(); ++i) {
+        for (uint32_t i = 0; i < config.depth_values.size(); ++i)
+        {
             os << config.depth_values[i];
             if (i < config.depth_values.size() - 1) os << ", ";
         }
@@ -99,7 +95,8 @@ struct SensitivityConfig {
 };
 
 // Result for a single configuration
-struct SensitivityResult {
+struct SensitivityResult
+{
     string algorithm;
     uint32_t k_value;   // Only relevant for ReSketch
     uint32_t width;
@@ -114,8 +111,10 @@ struct SensitivityResult {
     double aae_within_var;
 };
 
-void export_to_json(const string &filename, const SensitivityConfig &config, const CountMinConfig &cm_config, const ReSketchConfig &rs_config,
-                    const map<string, vector<vector<SensitivityResult>>> &all_results) {
+void export_to_json(
+    const string &filename, const SensitivityConfig &config, const CountMinConfig &cm_config, const ReSketchConfig &rs_config,
+    const map<string, vector<vector<SensitivityResult>>> &all_results)
+{
     create_directory(filename);
 
     // Build JSON object
@@ -128,40 +127,41 @@ void export_to_json(const string &filename, const SensitivityConfig &config, con
     j["metadata"] = {{"experiment_type", "sensitivity"}, {"timestamp", timestamp}};
 
     // Config section
-    j["config"]["experiment"] = {
-        {"repetitions", config.repetitions}, {"dataset_type", config.dataset_type}, {"total_items", config.total_items},
-        {"stream_size", config.stream_size}, {"stream_diversity", config.stream_diversity}, {"zipf_param", config.zipf_param}};
+    j["config"]["experiment"] = {{"repetitions", config.repetitions}, {"dataset_type", config.dataset_type},         {"total_items", config.total_items},
+                                 {"stream_size", config.stream_size}, {"stream_diversity", config.stream_diversity}, {"zipf_param", config.zipf_param}};
 
     j["config"]["base_sketch_config"]["countmin"] = {{"depth", cm_config.depth}};
     j["config"]["base_sketch_config"]["resketch"] = {{"depth", rs_config.depth}};
 
-    j["config"]["sensitivity_params"] = {
-        {"memory_budgets_kb", config.memory_budgets_kb}, {"k_values", config.k_values}, {"depth_values", config.depth_values}
-    };
+    j["config"]["sensitivity_params"] = {{"memory_budgets_kb", config.memory_budgets_kb}, {"k_values", config.k_values}, {"depth_values", config.depth_values}};
 
     // Results section
     json results_json;
-    for (const auto &[config_name, repetitions] : all_results) {
+    for (const auto &[config_name, repetitions] : all_results)
+    {
         json config_reps = json::array();
 
-        for (uint32_t rep = 0; rep < repetitions.size(); ++rep) {
+        for (uint32_t rep = 0; rep < repetitions.size(); ++rep)
+        {
             json rep_json;
             rep_json["repetition_id"] = rep;
 
             json results_array = json::array();
-            for (const auto &result : repetitions[rep]) {
-                json result_json = {{"algorithm", result.algorithm},
-                                    {"k_value", result.k_value},
-                                    {"width", result.width},
-                                    {"depth", result.depth},
-                                    {"memory_budget_bytes", result.memory_budget_bytes},
-                                    {"memory_used_bytes", result.memory_used_bytes},
-                                    {"throughput_mops", result.throughput_mops},
-                                    {"query_throughput_mops", result.query_throughput_mops},
-                                    {"are", result.are},
-                                    {"aae", result.aae},
-                                    {"are_within_var", result.are_within_var},
-                                    {"aae_within_var", result.aae_within_var}};
+            for (const auto &result : repetitions[rep])
+            {
+                json result_json = {
+                    {"algorithm", result.algorithm},
+                    {"k_value", result.k_value},
+                    {"width", result.width},
+                    {"depth", result.depth},
+                    {"memory_budget_bytes", result.memory_budget_bytes},
+                    {"memory_used_bytes", result.memory_used_bytes},
+                    {"throughput_mops", result.throughput_mops},
+                    {"query_throughput_mops", result.query_throughput_mops},
+                    {"are", result.are},
+                    {"aae", result.aae},
+                    {"are_within_var", result.are_within_var},
+                    {"aae_within_var", result.aae_within_var}};
                 results_array.push_back(result_json);
             }
 
@@ -176,7 +176,8 @@ void export_to_json(const string &filename, const SensitivityConfig &config, con
 
     // Write to file
     ofstream out(filename);
-    if (!out.is_open()) {
+    if (!out.is_open())
+    {
         cerr << format("Error: Cannot open output file: {}\n", filename);
         return;
     }
@@ -187,7 +188,8 @@ void export_to_json(const string &filename, const SensitivityConfig &config, con
     cout << format("\nResults exported to: {}\n", filename);
 }
 
-void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinConfig &cm_config, const ReSketchConfig &rs_config) {
+void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinConfig &cm_config, const ReSketchConfig &rs_config)
+{
     cout << config << endl;
     cout << cm_config << endl;
     cout << rs_config << endl;
@@ -197,39 +199,49 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
 
     // Configuration names
     all_results["CountMin"] = vector<vector<SensitivityResult>>(config.repetitions);
-    for (auto mem : config.memory_budgets_kb) {
-        for (auto depth : config.depth_values) {
-            for (auto k : config.k_values) {
+    for (auto mem : config.memory_budgets_kb)
+    {
+        for (auto depth : config.depth_values)
+        {
+            for (auto k : config.k_values)
+            {
                 string config_name = format("ReSketch_M{}_d{}_k{}", mem, depth, k);
                 all_results[config_name] = vector<vector<SensitivityResult>>(config.repetitions);
             }
         }
     }
 
-    for (uint32_t rep = 0; rep < config.repetitions; ++rep) {
+    for (uint32_t rep = 0; rep < config.repetitions; ++rep)
+    {
         cout << format("\n=== Repetition {}/{} ===\n", rep + 1, config.repetitions);
 
         // Generate or load dataset
         vector<uint64_t> data;
-        if (config.dataset_type == "zipf") {
+        if (config.dataset_type == "zipf")
+        {
             cout << "Generating Zipf data..." << endl;
             data = generate_zipf_data(config.stream_size, config.stream_diversity, config.zipf_param);
-        } else if (config.dataset_type == "caida") {
+        }
+        else if (config.dataset_type == "caida")
+        {
             cout << "Reading CAIDA data..." << endl;
             data = read_caida_data(config.caida_path, config.stream_size);
-            if (data.empty()) {
+            if (data.empty())
+            {
                 cerr << "Error: Failed to read CAIDA data. Skipping repetition." << endl;
                 continue;
             }
-        } else {
+        }
+        else
+        {
             cerr << format("Error: Unknown dataset type: {}. Skipping repetition.\n", config.dataset_type);
             continue;
         }
 
         // Limit to total_items
-        if (data.size() > config.total_items) {
-            data.resize(config.total_items);
-        } else if (data.size() < config.total_items) {
+        if (data.size() > config.total_items) { data.resize(config.total_items); }
+        else if (data.size() < config.total_items)
+        {
             // Repeat data to reach total_items
             vector<uint64_t> extended_data;
             extended_data.reserve(config.total_items);
@@ -248,7 +260,8 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
         query_items.reserve(true_freqs.size());
         for (const auto &[item, freq] : true_freqs) { query_items.push_back(item); }
 
-        for (auto memory_budget_kb : config.memory_budgets_kb) {
+        for (auto memory_budget_kb : config.memory_budgets_kb)
+        {
             auto memory_budget_bytes = memory_budget_kb * 1024UL;
             // Test Count-Min Sketch
             {
@@ -305,8 +318,10 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
             }
 
             // Test ReSketch with different depth and k values
-            for (auto depth : config.depth_values) {
-                for (auto k : config.k_values) {
+            for (auto depth : config.depth_values)
+            {
+                for (auto k : config.k_values)
+                {
                     uint32_t rs_width = calculate_width_from_memory_resketch(memory_budget_bytes, depth, k);
                     cout << format("ReSketch: M={}KiB, depth={}, k={}, width={}\n", memory_budget_kb, depth, k, rs_width);
 
@@ -372,16 +387,17 @@ void run_sensitivity_experiment(const SensitivityConfig &config, const CountMinC
     // Insert timestamp before file extension
     string output_file = config.output_file;
     uint32_t ext_pos = output_file.find_last_of('.');
-    if (ext_pos != string::npos) {
-        output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos);
-    } else {
+    if (ext_pos != string::npos) { output_file = output_file.substr(0, ext_pos) + "_" + timestamp + output_file.substr(ext_pos); }
+    else
+    {
         output_file += "_" + timestamp;
     }
 
     export_to_json(output_file, config, cm_config, rs_config, all_results);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     ConfigParser parser;
     SensitivityConfig sens_config;
     CountMinConfig cm_config;
@@ -391,13 +407,15 @@ int main(int argc, char **argv) {
     CountMinConfig::add_params_to_config_parser(cm_config, parser);
     ReSketchConfig::add_params_to_config_parser(rs_config, parser);
 
-    if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h")) {
+    if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h"))
+    {
         parser.PrintUsage();
         return 0;
     }
 
     Status s = parser.ParseCommandLine(argc, argv);
-    if (!s.IsOK()) {
+    if (!s.IsOK())
+    {
         fprintf(stderr, "%s\n", s.ToString().c_str());
         return -1;
     }

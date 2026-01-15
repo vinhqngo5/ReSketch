@@ -1,4 +1,4 @@
----
+Language: Cpp
 # options: https://clang.llvm.org/docs/ClangFormatStyleOptions.html
 BasedOnStyle: LLVM
 IndentWidth: 4
@@ -10,19 +10,52 @@ SpaceAfterCStyleCast: true
 UseTab: Never
 # if (x) doStuff()  is not allowed, bad style
 AllowAllParametersOfDeclarationOnNextLine: false
-AllowShortBlocksOnASingleLine: true
+AllowShortBlocksOnASingleLine: Always
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: All
-AllowShortIfStatementsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: WithoutElse
 AllowShortLoopsOnASingleLine: true
-# 
 AlignTrailingComments: true
 SpacesBeforeTrailingComments: 3
 # change the next line to All for Alistair's textbook style
-AlwaysBreakAfterReturnType: None
+BreakAfterReturnType: None
 #  #define SHORT_NAME       42
 #  #define LONGER_NAME      0x007f   # does nice spacing for macros
 AlignConsecutiveMacros: Consecutive
 # use \n instead of \r\n
-UseCRLF: false
+LineEnding: LF
 IndentPPDirectives: BeforeHash
+AccessModifierOffset: -4
+AlignAfterOpenBracket: AlwaysBreak
+AllowShortLambdasOnASingleLine: Empty
+BreakBeforeBraces: Allman
+SortIncludes:
+  Enabled: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  # Each "Priority" value becomes its own block, separated by a blank line.
+  # SortPriority determines ordering *within* the same block.
+  # Main module header is implicitly sorted into Priority: 0.
+  - Regex: 'config\.hpp"$'
+    Priority: 1
+  # Own headers
+  - Regex: '^"(frequency_summary|hash|quantile_summary)'
+    Priority: 2
+  # Put common.h at the end of the own headers block
+  - Regex: '^"common.hpp"'
+    Priority: 2
+    SortPriority: 3
+  # Utilities
+  - Regex: '^"utils'
+    Priority: 3
+  # 3rd party libraries
+  - Regex: '^<(json|kll|yaml-cpp)'
+    Priority: 4
+  - Regex: '^"geometric_sketch/'
+    Priority: 4
+  # System headers
+  - Regex: '.*'
+    Priority: 5
+PackConstructorInitializers: BinPack
+Standard: Auto
+InsertNewlineAtEOF: true
