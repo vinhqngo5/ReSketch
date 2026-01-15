@@ -257,7 +257,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
             true_freqs_all[item]++;
         }
 
-        cout << format("  Unique items: {} (A), {} (B), {}, (All)\n", true_freqs_A.size(), true_freqs_B.size(), true_freqs_all.size());
+        cout << format("  Unique items: {} (A), {} (B), {} (All)\n", true_freqs_A.size(), true_freqs_B.size(), true_freqs_all.size());
 
         // Process Sketch C (full width, processes both A and B)
         cout << "\nProcessing Sketch C (full, A+B)..." << endl;

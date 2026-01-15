@@ -248,7 +248,7 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
             true_freqs_all[item]++;
         }
 
-        cout << format("  Unique items: {} (A), {} (B), {}, (All)\n", true_freqs_A.size(), true_freqs_B.size(), true_freqs_all.size());
+        cout << format("  Unique items: {} (A), {} (B), {} (All)\n", true_freqs_A.size(), true_freqs_B.size(), true_freqs_all.size());
 
         // Generate shared seeds for all sketches to ensure consistent hashing
         std::mt19937_64 rng(std::random_device{}());
