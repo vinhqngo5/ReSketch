@@ -29,7 +29,7 @@ struct MergeConfig
 {
     uint32_t memory_budget_kb = 64;
     uint32_t repetitions = 3;
-    string dataset_type = "zipf";
+    string dataset_type = "caida";
     string caida_path = "data/CAIDA/only_ip";
     uint64_t stream_size = 10'000'000;
     uint64_t stream_diversity = 1'000'000;
