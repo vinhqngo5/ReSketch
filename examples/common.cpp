@@ -1,5 +1,6 @@
 #include "common.hpp"
 
+#include "frequency_summary/count_min_sketch.hpp"
 #include "frequency_summary/dynamic_sketch_wrapper.hpp"
 #include "frequency_summary/geometric_sketch_wrapper.hpp"
 
