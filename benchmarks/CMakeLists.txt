@@ -1,0 +1,3 @@
+add_executable(expected_count_benchmark expected_count_benchmark.cpp) 
+target_link_libraries(expected_count_benchmark PRIVATE frequency_summary_lib) 
+target_include_directories(expected_count_benchmark PRIVATE ${PROJECT_SOURCE_DIR}/3rd)
