@@ -1,3 +1,4 @@
+#define DOCTEST_CONFIG_IMPLEMENT
 #include "frequency_summary/frequency_summary_config.hpp"
 
 #include "frequency_summary/resketchv2.hpp"
@@ -9,6 +10,7 @@
 #include <json/json.hpp>
 #include <yaml-cpp/yaml.h>
 
+#include "doctest.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>

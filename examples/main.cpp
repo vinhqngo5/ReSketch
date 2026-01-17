@@ -1,3 +1,4 @@
+#define DOCTEST_CONFIG_IMPLEMENT
 #include "frequency_summary/frequency_summary_config.hpp"
 #include "quantile_summary/quantile_summary_config.hpp"
 
@@ -10,6 +11,7 @@
 
 #include "utils/ConfigParser.hpp"
 
+#include "doctest.h"
 #include <cmath>
 #include <iomanip>
 #include <iostream>

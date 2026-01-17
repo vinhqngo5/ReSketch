@@ -1,3 +1,4 @@
+#define DOCTEST_CONFIG_IMPLEMENT
 #include "frequency_summary/frequency_summary_config.hpp"
 
 #include "frequency_summary/count_min_sketch.hpp"
@@ -8,6 +9,7 @@
 
 #include <json/json.hpp>
 
+#include "doctest.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
