@@ -20,5 +20,8 @@ target_link_libraries(split_experiment PRIVATE experiment_common)
 add_executable(shrinking_experiment main_shrinking.cpp)
 target_link_libraries(shrinking_experiment PRIVATE experiment_common)
 
+add_executable(expansion_shrinking_experiment main_expansion_shrinking.cpp)
+target_link_libraries(expansion_shrinking_experiment PRIVATE experiment_common)
+
 add_executable(dag_experiment main_run_yaml.cpp)
 target_link_libraries(dag_experiment PRIVATE experiment_common yaml-cpp)

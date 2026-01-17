@@ -44,6 +44,18 @@ split_args=(
   "--app.stream_size 10000000"
 )
 
+expansion_shrinking_args=(
+  "--app.dataset_type caida"
+  "--app.repetitions 30"
+  "--app.m0_kb 32"
+  "--app.m2_kb 16"
+  "--app.memory_increment_kb 8"
+  "--app.expansion_interval 100000"
+  "--app.expansion_items 10000000"
+  "--app.shrinking_items 3000000"
+  "--app.stream_size 10000000"
+)
+
 dag_args=(
   "examples/dag/simple_dag.YAML"
 )
@@ -96,6 +108,7 @@ help() {
   echo -e "\tshrink: Shrinking performance"
   echo -e "\tmerge: Merging accuracy"
   echo -e "\tsplit: Splitting accuracy"
+  echo -e "\texpand_shrink: Combined expansion and shrinking"
   echo -e "\tdag: Run execution DAG"
 }
 
@@ -125,6 +138,7 @@ case "$exp" in
     run_and_viz "sensitivity_experiment" "sensitivity" ${sensitivity_args[@]} &
     run_and_viz "expansion_experiment" "expansion" ${expansion_args[@]} &
     run_and_viz "shrinking_experiment" "shrinking" ${shrinking_args[@]} &
+    run_and_viz "expansion_shrinking_experiment" "expansion_shrinking" ${expansion_shrinking_args[@]} &
     run_and_viz "merge_experiment" "merge" ${merge_args[@]} &
     run_and_viz "split_experiment" "split" ${split_args[@]} &
     run_and_viz "dag_experiment" "dag" ${dag_args[@]} &
@@ -143,6 +157,9 @@ case "$exp" in
     ;;
   split)
     run_and_viz "split_experiment" "split" ${split_args[@]} &
+    ;;
+  expand_shrink)
+    run_and_viz "expansion_shrinking_experiment" "expansion_shrinking" ${expansion_shrinking_args[@]} &
     ;;
   dag)
     run_and_viz "dag_experiment" "dag" ${dag_args[@]} &
