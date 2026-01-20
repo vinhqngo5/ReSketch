@@ -93,6 +93,16 @@ struct MergeResult
     AccuracyComparison b_vs_true_on_db;    // Sketch B's accuracy on DB items
     AccuracyComparison c_vs_true_on_all;   // Merged sketch C's accuracy on all items
     AccuracyComparison d_vs_true_on_all;   // Ground truth sketch D's accuracy on all items
+
+    struct ItemFrequency
+    {
+        uint64_t key;
+        uint64_t frequency;
+        double estimated_frequency;
+    };
+
+    vector<ItemFrequency> c_item_frequencies;
+    vector<ItemFrequency> d_item_frequencies;
 };
 
 void export_to_json(const string &filename, const MergeConfig &config, const ReSketchConfig &rs_config, const vector<MergeResult> &results)
@@ -145,6 +155,26 @@ void export_to_json(const string &filename, const MergeConfig &config, const ReS
                 {"aae", r.d_vs_true_on_all.aae},
                 {"are_variance", r.d_vs_true_on_all.are_variance},
                 {"aae_variance", r.d_vs_true_on_all.aae_variance}}}}}};
+
+        rep_json["c_frequencies"] = json::array();
+        for (const auto &[key, frequency, estimated_frequency] : r.c_item_frequencies)
+        {
+            rep_json["c_frequencies"].push_back({
+                {"key", key},
+                {"freq", frequency},
+                {"est", estimated_frequency},
+            });
+        }
+        rep_json["d_frequencies"] = json::array();
+        for (const auto &[key, frequency, estimated_frequency] : r.d_item_frequencies)
+        {
+            rep_json["d_frequencies"].push_back({
+                {"key", key},
+                {"freq", frequency},
+                {"est", estimated_frequency},
+            });
+        }
+
         j["results"].push_back(rep_json);
     }
 
@@ -326,6 +356,16 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
         result.d_vs_true_on_all.are_variance = calculate_are_variance(sketch_D, true_freqs_all, result.d_vs_true_on_all.are);
         result.d_vs_true_on_all.aae_variance = calculate_aae_variance(sketch_D, true_freqs_all, result.d_vs_true_on_all.aae);
         cout << format("  D (ground truth) vs True on All: ARE={}, AAE={}\n", result.d_vs_true_on_all.are, result.d_vs_true_on_all.aae);
+
+        result.c_item_frequencies.reserve(true_freqs_all.size());
+        result.d_item_frequencies.reserve(true_freqs_all.size());
+        for (auto &[key, true_freq] : true_freqs_all)
+        {
+            MergeResult::ItemFrequency c_item_freq{key, true_freq, sketch_C.estimate(key)};
+            result.c_item_frequencies.push_back(c_item_freq);
+            MergeResult::ItemFrequency d_item_freq{key, true_freq, sketch_D.estimate(key)};
+            result.d_item_frequencies.push_back(d_item_freq);
+        }
 
         all_results.push_back(result);
     }
