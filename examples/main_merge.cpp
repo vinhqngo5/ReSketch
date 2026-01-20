@@ -200,7 +200,7 @@ void run_merge_experiment(const MergeConfig &config, const ReSketchConfig &rs_co
     vector<MergeResult> all_results;
     all_results.reserve(config.repetitions);
 
-    uint64_t memory_budget_bytes = (uint64_t) config.memory_budget_kb * 1024;
+    uint64_t memory_budget_bytes = static_cast<uint64_t>(config.memory_budget_kb) * 1024;
     uint32_t width = calculate_width_from_memory_resketch(memory_budget_bytes, rs_config.depth, rs_config.kll_k);
 
     cout << format("\nReSketch Configuration: depth={}, k={}, width={}\n", rs_config.depth, rs_config.kll_k, width);
