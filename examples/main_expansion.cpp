@@ -265,6 +265,7 @@ void run_expansion_experiment(
         Timer timer;
         uint64_t items_processed = 0;
         uint32_t checkpoint_idx = 0;
+        uint64_t current_target_memory = initial_memory_bytes;
 
         while (items_processed < config.total_items)
         {
@@ -405,24 +406,27 @@ void run_expansion_experiment(
             // Expand sketches if not at end
             if (items_processed < config.total_items)
             {
+                // Increase target memory budget
+                current_target_memory += memory_increment_bytes;
+
                 // CountMin: cannot expand (do nothing)
 
-                // ReSketch: expand by memory_increment_kb
-                uint32_t rs_new_width = calculate_width_from_memory_resketch(rs_sketch.get_max_memory_usage() + memory_increment_bytes, rs_config.depth, rs_config.kll_k);
+                // ReSketch: expand to current target memory
+                uint32_t rs_new_width = calculate_width_from_memory_resketch(current_target_memory, rs_config.depth, rs_config.kll_k);
                 if (rs_new_width > rs_width)
                 {
                     rs_sketch.expand(rs_new_width);
                     rs_width = rs_new_width;
-                    cout << "  -> ReSketch expanded to width " << rs_width << endl;
+                    cout << "  -> ReSketch expanded to width " << rs_width << " (target: " << (current_target_memory / 1024) << " KB)" << endl;
                 }
 
-                // GeometricSketch: expand by memory_increment_kb
-                uint32_t gs_new_width = calculate_width_from_memory_geometric(gs_sketch.get_max_memory_usage() + memory_increment_bytes, gs_config.depth);
+                // GeometricSketch: expand to current target memory
+                uint32_t gs_new_width = calculate_width_from_memory_geometric(current_target_memory, gs_config.depth);
                 if (gs_new_width > gs_width)
                 {
                     gs_sketch.expand(gs_new_width);
                     gs_width = gs_new_width;
-                    cout << "  -> GeometricSketch expanded to width " << gs_width << endl;
+                    cout << "  -> GeometricSketch expanded to width " << gs_width << " (target: " << (current_target_memory / 1024) << " KB)" << endl;
                 }
 
                 // DynamicSketch: accumulate budget until we can double
