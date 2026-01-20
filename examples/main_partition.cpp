@@ -24,8 +24,8 @@
 using namespace std;
 using json = nlohmann::json;
 
-// Split Experiment Config
-struct SplitConfig
+// Partition Experiment Config
+struct PartitionConfig
 {
     uint32_t memory_budget_kb = 32;
     uint32_t repetitions = 10;
@@ -34,9 +34,9 @@ struct SplitConfig
     uint64_t stream_size = 10'000'000;
     uint64_t stream_diversity = 1'000'000;
     float zipf_param = 1.1;
-    string output_file = "output/split_results.json";
+    string output_file = "output/partition_results.json";
 
-    static void add_params_to_config_parser(SplitConfig &config, ConfigParser &parser)
+    static void add_params_to_config_parser(PartitionConfig &config, ConfigParser &parser)
     {
         parser.AddParameter(
             new UnsignedInt32Parameter("app.memory_budget_kb", to_string(config.memory_budget_kb), &config.memory_budget_kb, false, "Memory budget in KB per sketch"));
@@ -49,9 +49,9 @@ struct SplitConfig
         parser.AddParameter(new StringParameter("app.output_file", config.output_file, &config.output_file, false, "Output JSON file path"));
     }
 
-    friend ostream &operator<<(ostream &os, const SplitConfig &config)
+    friend ostream &operator<<(ostream &os, const PartitionConfig &config)
     {
-        os << "\n=== Split Experiment Configuration ===" << endl;
+        os << "\n=== Partition Experiment Configuration ===" << endl;
         os << format("Memory Budget (per sketch): {} KiB\n", config.memory_budget_kb);
         os << format("Repetitions: {}\n", config.repetitions);
         os << format("Dataset: {}\n", config.dataset_type);
@@ -65,37 +65,38 @@ struct SplitConfig
 };
 
 // Result structure
-struct AccuracyMetrics
-{
-    double are = 0.0;
-    double aae = 0.0;
-    double are_variance = 0.0;
-    double aae_variance = 0.0;
-};
 
-struct SketchMetrics
+struct PartitionResult
 {
-    double process_time_s = 0.0;
-    uint32_t memory_bytes = 0;
-};
+    struct SketchMetrics
+    {
+        double process_time_s = 0.0;
+        uint32_t memory_bytes = 0;
+    };
 
-struct SplitResult
-{
     // Sketch metrics
     SketchMetrics sketch_c_full;
     SketchMetrics sketch_a_direct;
     SketchMetrics sketch_b_direct;
     double split_time_s = 0.0;
 
+    struct AccuracyMetrics
+    {
+        double are = 0.0;
+        double aae = 0.0;
+        double are_variance = 0.0;
+        double aae_variance = 0.0;
+    };
+
     // Accuracy comparisons
-    AccuracyMetrics a_prime_vs_true_on_da;   // A' (from split) vs true frequencies on DA
-    AccuracyMetrics b_prime_vs_true_on_db;   // B' (from split) vs true frequencies on DB
+    AccuracyMetrics a_prime_vs_true_on_da;   // A' (from partition) vs true frequencies on DA
+    AccuracyMetrics b_prime_vs_true_on_db;   // B' (from partition) vs true frequencies on DB
     AccuracyMetrics a_vs_true_on_da;         // A (direct) vs true frequencies on DA
     AccuracyMetrics b_vs_true_on_db;         // B (direct) vs true frequencies on DB
     AccuracyMetrics c_vs_true_on_all;        // C (full) vs true frequencies on All
 };
 
-void export_to_json(const string &filename, const SplitConfig &app_config, const ReSketchConfig &rs_config, const vector<SplitResult> &results)
+void export_to_json(const string &filename, const PartitionConfig &app_config, const ReSketchConfig &rs_config, const vector<PartitionResult> &results)
 {
     create_directory(filename);
 
@@ -168,12 +169,12 @@ void export_to_json(const string &filename, const SplitConfig &app_config, const
     cout << format("\nResults exported to: {}\n", filename);
 }
 
-void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_config)
+void run_partition_experiment(const PartitionConfig &config, const ReSketchConfig &rs_config)
 {
     cout << config << endl;
     cout << rs_config << endl;
 
-    vector<SplitResult> all_results;
+    vector<PartitionResult> all_results;
     all_results.reserve(config.repetitions);
 
     uint32_t memory_bytes = config.memory_budget_kb * 1024;
@@ -188,7 +189,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         cout << format("\n=== Repetition {}/{} ===\n", rep + 1, config.repetitions);
         cout << "========================================" << endl;
 
-        SplitResult result;
+        PartitionResult result;
 
         // Generate shared seeds for all sketches to ensure consistent hashing
         std::mt19937_64 rng(std::random_device{}());
@@ -199,8 +200,8 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         shared_seeds.reserve(rs_config.depth);
         for (uint32_t i = 0; i < rs_config.depth; ++i) { shared_seeds.push_back(dist(rng)); }
 
-        // Calculate split point for hash-based partitioning
-        uint64_t split_point = static_cast<uint64_t>((static_cast<long double>(width / 2) / width) * std::numeric_limits<uint64_t>::max());
+        // Calculate partition point for hash-based partitioning
+        auto partition_point = static_cast<uint64_t>(static_cast<long double>(width / 2) / width * std::numeric_limits<uint64_t>::max());
 
         // Generate full dataset first
         vector<uint64_t> full_data;
@@ -225,7 +226,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
             continue;
         }
 
-        // Split data based on hash domain (same as split operation)
+        // Partition data based on hash domain (same as partition operation)
         vector<uint64_t> data_A, data_B;
         data_A.reserve(full_data.size() / 2);
         data_B.reserve(full_data.size() / 2);
@@ -233,7 +234,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         for (const auto &item : full_data)
         {
             uint64_t partition_hash = ReSketchV2::compute_partition_hash(item, shared_partition_seed);
-            if (partition_hash < split_point) { data_A.push_back(item); }
+            if (partition_hash < partition_point) { data_A.push_back(item); }
             else
             {
                 data_B.push_back(item);
@@ -241,8 +242,8 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         }
 
         cout << format("  Full dataset: {} items\n", full_data.size());
-        cout << format("  DA (hash < split_point): {} items\n", data_A.size());
-        cout << format("  DB (hash >= split_point): {} items\n", data_B.size());
+        cout << format("  DA (hash < partition_point): {} items\n", data_A.size());
+        cout << format("  DB (hash >= partition_point): {} items\n", data_B.size());
 
         // Calculate true frequencies for each dataset
         map<uint64_t, uint64_t> true_freqs_A, true_freqs_B, true_freqs_all;
@@ -270,14 +271,14 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         result.sketch_c_full.memory_bytes = sketch_C.get_max_memory_usage();
         cout << format("  Time: {} s, Memory: {} KiB\n", result.sketch_c_full.process_time_s, result.sketch_c_full.memory_bytes / 1024);
 
-        // Split C into A' and B'
-        cout << "\nSplitting Sketch C into A' and B'..." << endl;
+        // Partition C into A' and B'
+        cout << "\nPartitioning Sketch C into A' and B'..." << endl;
         timer.start();
         auto [sketch_A_prime, sketch_B_prime] = ReSketchV2::split(sketch_C, width / 2, width / 2);
         result.split_time_s = timer.stop_s();
-        cout << format("  Split time: {} s", result.split_time_s);
+        cout << format("  Partition time: {} s", result.split_time_s);
 
-        // Print partition ranges to verify split
+        // Print partition ranges to verify partition
         cout << "  A' partition ranges: ";
         for (const auto &[start, end] : sketch_A_prime.get_partition_ranges()) { cout << format("[{}, {}) ", start, end); }
         cout << endl;
@@ -359,7 +360,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
             result.a_prime_vs_true_on_da.aae_variance = sum_sq / a_prime_abs_errors.size();
         }
 
-        cout << format("  A' (split) on its partition ({} items): ARE={}, AAE={}\n", count_a_prime, result.a_prime_vs_true_on_da.are, result.a_prime_vs_true_on_da.aae);
+        cout << format("  A' (partition) on its partition ({} items): ARE={}, AAE={}\n", count_a_prime, result.a_prime_vs_true_on_da.are, result.a_prime_vs_true_on_da.aae);
 
         result.b_prime_vs_true_on_db.are = count_b_prime > 0 ? total_rel_error_b_prime / count_b_prime : 0.0;
         result.b_prime_vs_true_on_db.aae = count_b_prime > 0 ? total_abs_error_b_prime / count_b_prime : 0.0;
@@ -378,7 +379,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
             result.b_prime_vs_true_on_db.aae_variance = sum_sq / b_prime_abs_errors.size();
         }
 
-        cout << format("  B' (split) on its partition ({} items): ARE={}, AAE={}\n", count_b_prime, result.b_prime_vs_true_on_db.are, result.b_prime_vs_true_on_db.aae);
+        cout << format("  B' (partition) on its partition ({} items): ARE={}, AAE={}\n", count_b_prime, result.b_prime_vs_true_on_db.are, result.b_prime_vs_true_on_db.aae);
 
         // A (direct) vs true on DA items: baseline
         result.a_vs_true_on_da.are = calculate_are_all_items(sketch_A, true_freqs_A);
@@ -423,10 +424,10 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
 int main(int argc, char **argv)
 {
     ConfigParser parser;
-    SplitConfig app_config;
+    PartitionConfig app_config;
     ReSketchConfig rs_config;
 
-    SplitConfig::add_params_to_config_parser(app_config, parser);
+    PartitionConfig::add_params_to_config_parser(app_config, parser);
     ReSketchConfig::add_params_to_config_parser(rs_config, parser);
 
     if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h"))
@@ -442,7 +443,7 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    run_split_experiment(app_config, rs_config);
+    run_partition_experiment(app_config, rs_config);
 
     return 0;
 }
