@@ -207,7 +207,7 @@ def style_axis(ax, font_config, ylabel, xlabel=None, title=None, use_log_scale=F
     
     if title:
         ax.set_title(title, fontsize=font_config['title_size'], 
-                    fontfamily=font_config['family'], pad=2)
+                    fontfamily=font_config['family'], pad=4)
     
     if use_log_scale:
         ax.set_yscale('log')

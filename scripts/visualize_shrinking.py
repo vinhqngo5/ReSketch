@@ -87,8 +87,8 @@ def plot_results(config, aggregated, output_path, plot_every_n_points=1, show_wi
     font_config = setup_fonts(__file__)
     
     num_plots = 7 if show_within_variance else 5
-    fig_height = 14 if show_within_variance else 10
-    fig, axes = plt.subplots(num_plots, 1, figsize=(6.45, fig_height), sharex=True)
+    fig_height = (9 if show_within_variance else 7) * 0.8
+    fig, axes = plt.subplots(num_plots, 1, figsize=(3.33, fig_height), sharex=True)
     
     styles = get_sketch_styles(material_colors)
     
@@ -124,8 +124,11 @@ def plot_results(config, aggregated, output_path, plot_every_n_points=1, show_wi
                              label=f'GS limit ({initial_memory_kb}KB)')
     
     style_axis(ax_throughput, font_config, 
-              ylabel='Throughput (Mops/s)',
-              title='Shrinking Experiment Results')
+              ylabel='Throughput',)
+            #   title='Shrinking Experiment Results')
+    ax_throughput.text(0.12, 1.02, 'Mops/s', transform=ax_throughput.transAxes,
+                      fontsize=font_config['tick_size'], va='bottom', ha='right',
+                      fontfamily=font_config['family'])
     
     ax_query = axes[1]
     for sketch_name, data in aggregated.items():
@@ -145,7 +148,10 @@ def plot_results(config, aggregated, output_path, plot_every_n_points=1, show_wi
         limit_items = gs_data['items'][geometric_limit_idx] / 1e6
         ax_query.axvline(x=limit_items, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
     
-    style_axis(ax_query, font_config, ylabel='Query Throughput (Mops/s)')
+    style_axis(ax_query, font_config, ylabel='Query')
+    ax_query.text(0.12, 1.02, 'Mops/s', transform=ax_query.transAxes,
+                 fontsize=font_config['tick_size'], va='bottom', ha='right',
+                 fontfamily=font_config['family'])
     
     ax_are = axes[2]
     for sketch_name, data in aggregated.items():
@@ -187,34 +193,9 @@ def plot_results(config, aggregated, output_path, plot_every_n_points=1, show_wi
     
     style_axis(ax_aae, font_config, ylabel='AAE', use_log_scale=True)
     
-    ax_memory = axes[4]
-    for sketch_name, data in aggregated.items():
-        style = styles.get(sketch_name, {})
-        items = data['items'] / 1e6
-        mean = data['memory_mean']
-        std = data['memory_std']
-        
-        indices = np.arange(0, len(items), plot_every_n_points)
-        items_sampled = items[indices]
-        mean_sampled = mean[indices]
-        std_sampled = std[indices]
-        
-        plot_line_with_error(ax_memory, items_sampled, mean_sampled, std_sampled, style)
-    
-    if geometric_limit_idx is not None and gs_data is not None:
-        limit_items = gs_data['items'][geometric_limit_idx] / 1e6
-        ax_memory.axvline(x=limit_items, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
-    
-    if show_within_variance:
-        style_axis(ax_memory, font_config, ylabel='Memory (KB)')
-    else:
-        style_axis(ax_memory, font_config, 
-                  xlabel='Items Processed (millions)',
-                  ylabel='Memory (KB)')
-    
     if show_within_variance:
         # ARE within-run variance
-        ax_are_var = axes[5]
+        ax_are_var = axes[4]
         for sketch_name, data in aggregated.items():
             style = styles.get(sketch_name, {})
             items = data['items'] / 1e6
@@ -235,7 +216,7 @@ def plot_results(config, aggregated, output_path, plot_every_n_points=1, show_wi
         style_axis(ax_are_var, font_config, ylabel='ARE Variance\n(within-run)')
         
         # AAE within-run variance
-        ax_aae_var = axes[6]
+        ax_aae_var = axes[5]
         for sketch_name, data in aggregated.items():
             style = styles.get(sketch_name, {})
             items = data['items'] / 1e6
@@ -253,15 +234,40 @@ def plot_results(config, aggregated, output_path, plot_every_n_points=1, show_wi
             limit_items = gs_data['items'][geometric_limit_idx] / 1e6
             ax_aae_var.axvline(x=limit_items, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
         
-        style_axis(ax_aae_var, font_config, 
-                  xlabel='Items Processed (millions)',
-                  ylabel='AAE Variance\n(within-run)')
+        style_axis(ax_aae_var, font_config, ylabel='AAE Variance\n(within-run)')
     
-    top_adjust = 0.98 if show_within_variance else 0.96
-    create_shared_legend(fig, ax_throughput, ncol=5, font_config=font_config,
-                        bbox_to_anchor=(0.5, 1.02), top_adjust=top_adjust)
+    # Memory plot - always at the bottom
+    memory_idx = 6 if show_within_variance else 4
+    ax_memory = axes[memory_idx]
+    for sketch_name, data in aggregated.items():
+        style = styles.get(sketch_name, {})
+        items = data['items'] / 1e6
+        mean = data['memory_mean']
+        std = data['memory_std']
+        
+        indices = np.arange(0, len(items), plot_every_n_points)
+        items_sampled = items[indices]
+        mean_sampled = mean[indices]
+        std_sampled = std[indices]
+        
+        plot_line_with_error(ax_memory, items_sampled, mean_sampled, std_sampled, style)
     
-    plt.tight_layout()
+    if geometric_limit_idx is not None and gs_data is not None:
+        limit_items = gs_data['items'][geometric_limit_idx] / 1e6
+        ax_memory.axvline(x=limit_items, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
+    
+    style_axis(ax_memory, font_config,
+              xlabel='Items Processed (millions)',
+              ylabel='Memory')
+    ax_memory.text(0.05, 1.02, 'KB', transform=ax_memory.transAxes,
+                  fontsize=font_config['tick_size'], va='bottom', ha='right',
+                  fontfamily=font_config['family'])
+    
+    top_adjust = 0.93 if show_within_variance else 0.95
+    create_shared_legend(fig, ax_throughput, ncol=3, font_config=font_config,
+                        bbox_to_anchor=(0.4, 1.02), top_adjust=top_adjust)
+    
+    plt.subplots_adjust(left=-0.1, right=1, top=top_adjust, bottom=0, hspace=0.3)
     
     save_figure(fig, output_path)
 

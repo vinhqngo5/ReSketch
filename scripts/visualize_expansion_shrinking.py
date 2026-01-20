@@ -154,8 +154,8 @@ def plot_expansion_results(config, aggregated, output_path, plot_every_n_points=
     font_config = setup_fonts(__file__)
     
     num_plots = 7 if show_within_variance else 5
-    fig_height = 14 if show_within_variance else 10
-    fig, axes = plt.subplots(num_plots, 1, figsize=(6.45, fig_height), sharex=True)
+    fig_height = (9 if show_within_variance else 7) * 0.8
+    fig, axes = plt.subplots(num_plots, 1, figsize=(3.33, fig_height), sharex=True)
     
     styles = get_sketch_styles(material_colors)
     
@@ -175,8 +175,14 @@ def plot_expansion_results(config, aggregated, output_path, plot_every_n_points=
         plot_line_with_error(ax_throughput, items_sampled, mean_sampled, std_sampled, style)
     
     style_axis(ax_throughput, font_config, 
-              ylabel='Throughput (Mops/s)',
-              title='Expansion Experiment Results')
+              ylabel='Throughput',)
+            #   title='Expansion Experiment Results')
+    ax_throughput.text(0.12, 1.02, 'Mops/s', transform=ax_throughput.transAxes,
+                      fontsize=font_config['tick_size'], va='bottom', ha='right',
+                      fontfamily=font_config['family'])
+    ax_throughput.text(0.12, 1.02, 'Mops/s', transform=ax_throughput.transAxes,
+                      fontsize=font_config['tick_size'], va='bottom', ha='right',
+                      fontfamily=font_config['family'])
     
     # Query throughput plot
     ax_query = axes[1]
@@ -193,7 +199,13 @@ def plot_expansion_results(config, aggregated, output_path, plot_every_n_points=
         
         plot_line_with_error(ax_query, items_sampled, mean_sampled, std_sampled, style)
     
-    style_axis(ax_query, font_config, ylabel='Query Throughput (Mops/s)')
+    style_axis(ax_query, font_config, ylabel='Query')
+    ax_query.text(0.12, 1.02, 'Mops/s', transform=ax_query.transAxes,
+                 fontsize=font_config['tick_size'], va='bottom', ha='right',
+                 fontfamily=font_config['family'])
+    ax_query.text(0.12, 1.02, 'Mops/s', transform=ax_query.transAxes,
+                 fontsize=font_config['tick_size'], va='bottom', ha='right',
+                 fontfamily=font_config['family'])
     
     # ARE plot
     ax_are = axes[2]
@@ -229,31 +241,9 @@ def plot_expansion_results(config, aggregated, output_path, plot_every_n_points=
     
     style_axis(ax_aae, font_config, ylabel='AAE', use_log_scale=True)
     
-    # Memory plot
-    ax_memory = axes[4]
-    for sketch_name, data in aggregated.items():
-        style = styles.get(sketch_name, {})
-        items = data['items'] / 1e6
-        mean = data['memory_mean']
-        std = data['memory_std']
-        
-        indices = np.arange(0, len(items), plot_every_n_points)
-        items_sampled = items[indices]
-        mean_sampled = mean[indices]
-        std_sampled = std[indices]
-        
-        plot_line_with_error(ax_memory, items_sampled, mean_sampled, std_sampled, style)
-    
     if show_within_variance:
-        style_axis(ax_memory, font_config, ylabel='Memory (KB)')
-    else:
-        style_axis(ax_memory, font_config, 
-                  xlabel='Items Processed (millions)',
-                  ylabel='Memory (KB)')
-    
-    if show_within_variance:
-        # ARE variance plot
-        ax_are_var = axes[5]
+        # ARE within-run variance
+        ax_are_var = axes[4]
         for sketch_name, data in aggregated.items():
             style = styles.get(sketch_name, {})
             items = data['items'] / 1e6
@@ -269,8 +259,8 @@ def plot_expansion_results(config, aggregated, output_path, plot_every_n_points=
         
         style_axis(ax_are_var, font_config, ylabel='ARE Variance\n(within-run)')
         
-        # AAE variance plot
-        ax_aae_var = axes[6]
+        # AAE within-run variance
+        ax_aae_var = axes[5]
         for sketch_name, data in aggregated.items():
             style = styles.get(sketch_name, {})
             items = data['items'] / 1e6
@@ -284,15 +274,37 @@ def plot_expansion_results(config, aggregated, output_path, plot_every_n_points=
             
             plot_line_with_error(ax_aae_var, items_sampled, mean_sampled, std_sampled, style)
         
-        style_axis(ax_aae_var, font_config, 
-                  xlabel='Items Processed (millions)',
-                  ylabel='AAE Variance\n(within-run)')
+        style_axis(ax_aae_var, font_config, ylabel='AAE Variance\n(within-run)')
     
-    top_adjust = 0.98 if show_within_variance else 0.96
-    create_shared_legend(fig, ax_throughput, ncol=5, font_config=font_config,
-                        bbox_to_anchor=(0.5, 1.02), top_adjust=top_adjust)
+    # Memory plot is always at the bottom
+    memory_idx = 6 if show_within_variance else 4
+    ax_memory = axes[memory_idx]
+    for sketch_name, data in aggregated.items():
+        style = styles.get(sketch_name, {})
+        items = data['items'] / 1e6
+        mean = data['memory_mean']
+        std = data['memory_std']
+        
+        indices = np.arange(0, len(items), plot_every_n_points)
+        items_sampled = items[indices]
+        mean_sampled = mean[indices]
+        std_sampled = std[indices]
+        
+        plot_line_with_error(ax_memory, items_sampled, mean_sampled, std_sampled, style)
     
-    plt.tight_layout()
+    style_axis(ax_memory, font_config,
+              xlabel='Items Processed (millions)',
+              ylabel='Memory')
+    ax_memory.text(0.05, 1.02, 'KB', transform=ax_memory.transAxes,
+                  fontsize=font_config['tick_size'], va='bottom', ha='right',
+                  fontfamily=font_config['family'])
+    
+    top_adjust = 0.93 if show_within_variance else 0.95
+    create_shared_legend(fig, ax_throughput, ncol=3, font_config=font_config,
+                        bbox_to_anchor=(0.4, 1.02), top_adjust=top_adjust)
+    
+    plt.subplots_adjust(left=-0.1, right=1, top=top_adjust, bottom=0, hspace=0.3)
+    
     save_figure(fig, output_path)
 
 def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, expansion_aggregated, output_path, plot_every_n_points=1, show_within_variance=True):
@@ -300,8 +312,8 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
     font_config = setup_fonts(__file__)
     
     num_plots = 7 if show_within_variance else 5
-    fig_height = 14 if show_within_variance else 10
-    fig, axes = plt.subplots(num_plots, 1, figsize=(6.45, fig_height), sharex=True)
+    fig_height = (9 if show_within_variance else 7) * 0.8
+    fig, axes = plt.subplots(num_plots, 1, figsize=(3.33, fig_height), sharex=True)
     
     styles = get_sketch_styles(material_colors)
     
@@ -453,18 +465,20 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
     ax2_list = []
     
     metrics = [
-        ('throughput_mean', 'throughput_std', 'Throughput (Mops/s)', False, 0, 'Shrinking Experiment Results', False),
-        ('query_throughput_mean', 'query_throughput_std', 'Query Throughput (Mops/s)', False, 1, None, False),
+        ('throughput_mean', 'throughput_std', 'Throughput', False, 0, None, False),
+        ('query_throughput_mean', 'query_throughput_std', 'Query', False, 1, None, False),
         ('are_mean', 'are_std', 'ARE', True, 2, None, True),
         ('aae_mean', 'aae_std', 'AAE', True, 3, None, True),
-        ('memory_mean', 'memory_std', 'Memory (KB)', False, 4, None, True),
     ]
     
     if show_within_variance:
         metrics.extend([
-            ('are_var_mean', 'are_var_std', 'ARE Variance\\n(within-run)', False, 5, None, True),
-            ('aae_var_mean', 'aae_var_std', 'AAE Variance\\n(within-run)', False, 6, None, True),
+            ('are_var_mean', 'are_var_std', 'ARE Variance', False, 4, None, True),
+            ('aae_var_mean', 'aae_var_std', 'AAE Variance', False, 5, None, True),
         ])
+    
+    memory_idx = 6 if show_within_variance else 4
+    metrics.append(('memory_mean', 'memory_std', 'Memory', False, memory_idx, None, True))
     
     for mean_key, std_key, ylabel, use_log, ax_idx, title, plot_nodata in metrics:
         ax = axes[ax_idx]
@@ -489,15 +503,10 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
             
             x_positions = checkpoint_indices[:len(mean)]
             
-            indices = np.arange(0, len(x_positions), plot_every_n_points)
-            x_sampled = x_positions[indices]
-            mean_sampled = mean[indices]
-            std_sampled = std[indices]
-            
-            plot_line_with_error(ax, x_sampled, mean_sampled, std_sampled, style)
+            plot_line_with_error(ax, x_positions, mean, std, style)
         
         # Plot NoData variants
-        if plot_nodata and not is_throughput_plot and ax_idx != 4:
+        if plot_nodata and not is_throughput_plot and ax_idx != memory_idx:
             for sketch_name, data in no_data_aggregated.items():
                 full_name = sketch_name + '_ShrinkNoData'
                 style = shrinking_styles.get(full_name, {})
@@ -506,13 +515,8 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                 
                 x_positions = checkpoint_indices[:len(mean)]
                 
-                indices = np.arange(0, len(x_positions), plot_every_n_points)
-                x_sampled = x_positions[indices]
-                mean_sampled = mean[indices]
-                std_sampled = std[indices]
-                
                 target_ax = ax2 if not is_throughput_plot and plot_nodata else ax
-                plot_line_with_error(target_ax, x_sampled, mean_sampled, std_sampled, style)
+                plot_line_with_error(target_ax, x_positions, mean, std, style)
         
         if geometric_limit_idx is not None and gs_data is not None:
             limit_label = f'GS limit ({int(geometric_limit_memory)}KB)' if geometric_limit_memory is not None else f'GS limit ({m0_kb}KB)'
@@ -521,6 +525,16 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
         
         xlabel_bottom = 'Items Processed (millions)' if ax_idx == num_plots - 1 else None
         style_axis(ax, font_config, ylabel=ylabel, xlabel=xlabel_bottom, title=title, use_log_scale=use_log)
+        
+        # Add unit labels on top of y-axis
+        if ax_idx in [0, 1]:  # Throughput and Query plots
+            ax.text(0.12, 1.02, 'Mops/s', transform=ax.transAxes,
+                   fontsize=font_config['tick_size'], va='bottom', ha='right',
+                   fontfamily=font_config['family'])
+        elif ax_idx == memory_idx:  # Memory plot
+            ax.text(0.05, 1.02, 'KB', transform=ax.transAxes,
+                   fontsize=font_config['tick_size'], va='bottom', ha='right',
+                   fontfamily=font_config['family'])
         
         def format_plain(x, pos):
             if x == 0: return "0"
@@ -532,6 +546,7 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
             formatter = ScalarFormatter(useOffset=False)
             formatter.set_scientific(False)
             ax.yaxis.set_major_formatter(formatter)
+            ax.yaxis.set_major_locator(plt.MaxNLocator(nbins=3, min_n_ticks=3))
         else:
             ax.yaxis.set_major_formatter(plt.FuncFormatter(format_plain))
             ax.yaxis.set_minor_formatter(plt.NullFormatter())
@@ -545,7 +560,7 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
             ax.set_xticklabels([f'{items:.1f}' for items in items_labels])
         
         # Memory plot zoom inset
-        if ax_idx == 4:
+        if ax_idx == memory_idx:
             
             axins = inset_axes(ax, width="25%", height="30%", loc='upper right',
                              borderpad=1.5)
@@ -575,7 +590,7 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
             axins.set_xticklabels(tick_labels, fontsize=font_config['tick_size'] - 1)
             axins.tick_params(labelsize=font_config['tick_size'] - 1)
             axins.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
-            axins.set_ylabel('Memory (KB)', fontsize=font_config['label_size'] - 1)
+            # axins.set_ylabel('Memory (KB)', fontsize=font_config['label_size'] - 1)
             formatter = ScalarFormatter(useOffset=False)
             formatter.set_scientific(False)
             axins.yaxis.set_major_formatter(formatter)
@@ -586,27 +601,26 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                 spine.set_linewidth(0.8)
         
         # ARE/AAE zoom insets
-        if ax_idx in [2, 3, 5, 6] and plot_nodata:
+        if ax_idx in [2, 3, 4, 5] and plot_nodata and ax_idx != memory_idx:
             zoom_start = max(0, num_checkpoints - 4)
             zoom_indices = checkpoint_indices[zoom_start:]
             
             # Create 2 insets: one for ReSketch pair, one for GeometricSketch pair
-            # Order: GeometricSketch (RED) → UPPER, ReSketch (PURPLE) → LOWER
             for inset_idx, sketch_name in enumerate(['GeometricSketch', 'ReSketch']):
                 if sketch_name not in with_data_aggregated or sketch_name not in no_data_aggregated:
                     continue
                 
                 is_upper = (inset_idx == 0)
                 
-                if ax_idx in [5, 6]:
+                if ax_idx in [4, 5]:  # Variance plots
                     base_x = 0.28
                 else:
                     base_x = 0.72
                 
                 if is_upper:
-                    base_y = 0.52
+                    base_y = 0.58
                 else:
-                    base_y = 0.22
+                    base_y = 0.28
 
                 
                 bbox_tuple = (base_x, base_y, 0.25, 0.25)
@@ -683,15 +697,16 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
         # Style secondary axis
         if not is_throughput_plot and plot_nodata:
             if ax_idx == 2:
-                ax2.set_xlabel('Memory (KB)', fontsize=font_config['label_size'])
+                # ax2.set_xlabel('Memory (KB)', fontsize=font_config['label_size'])
                 
                 # Set secondary axis to match primary
                 ax2.set_xlim(-0.5, num_checkpoints - 0.5)
                 
                 # Label with power-of-2 memory values at checkpoint positions
+                # make the xticks label closer to the ticks
                 ax2.set_xticks(checkpoint_indices)
                 ax2.set_xticklabels([f'{int(m)}' for m in memory_checkpoints])
-                ax2.tick_params(labelsize=font_config['tick_size'])
+                ax2.tick_params(labelsize=font_config['tick_size'], pad=1)
             else:
                 ax2.tick_params(labeltop=False)
     
@@ -716,21 +731,20 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                 labels_list.append(label)
                 seen_labels.add(label)
     
-    top_adjust = 0.98 if show_within_variance else 0.96
+    top_adjust = 0.90 if show_within_variance else 0.88
     if handles_list:
         fig.legend(handles_list, labels_list,
                   loc='upper center',
-                  bbox_to_anchor=(0.5, 1.02),
-                  ncol=3,
+                  bbox_to_anchor=(0.4, 1.02),
+                  ncol=2,
                   fontsize=font_config['legend_size'],
                   frameon=False,
                   handlelength=1.5,
                   handletextpad=0.5,
                   columnspacing=1.0,
                   prop={'family': font_config['family']})
-        fig.subplots_adjust(top=top_adjust)
     
-    plt.tight_layout()
+    plt.subplots_adjust(left=-0.1, right=1, top=top_adjust, bottom=0, hspace=0.3)
     save_figure(fig, output_path)
 
 def main():
