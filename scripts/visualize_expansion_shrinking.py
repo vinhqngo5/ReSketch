@@ -390,9 +390,9 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
     elif no_data_aggregated.get('ReSketch') is not None and len(no_data_aggregated['ReSketch']['memory_mean']) > 0:
         m1_kb = no_data_aggregated['ReSketch']['memory_mean'][0]
     
-    m1_kb_rounded = 2 ** int(np.round(np.log2(m1_kb)))
+    m1_kb_rounded = 2 ** int(np.floor(np.log2(m1_kb)))
     
-    print(f"  Calculated M1 from data: {m1_kb:.1f} KB (rounded to {m1_kb_rounded} KB for visualization)")
+    print(f"  Calculated M1 from data: {m1_kb:.1f} KB (next power-of-2 below: {m1_kb_rounded} KB)")
     print(f"  M2 target: {m2_kb} KB")
     
     # Create custom styles for shrinking variants
@@ -432,18 +432,20 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                 geometric_limit_idx = i
                 break
     
-    # Calculate power-of-2 memory checkpoints
-    memory_checkpoints = [int(m1_kb)]
-    current_mem = m1_kb_rounded
-    while current_mem >= m2_kb:
-        memory_checkpoints.append(current_mem)
-        current_mem //= 2
-    
-    print(f"  Memory checkpoint labels: {memory_checkpoints}")
-    
-    # Get number of checkpoints from data
+    # secondary x-axis: checkpoint indices
     num_checkpoints = len(reference_withdata['memory_mean']) if reference_withdata else 0
     checkpoint_indices = np.arange(num_checkpoints)
+    
+    memory_checkpoints = []
+    if reference_withdata is not None:
+        memory_checkpoints.append(int(m1_kb))
+        current_mem = m1_kb_rounded
+        for i in range(1, num_checkpoints):
+            memory_checkpoints.append(current_mem)
+            current_mem //= 2
+    
+    print(f"  Actual memory values from data: {[int(m) for m in reference_withdata['memory_mean']] if reference_withdata else []}")
+    print(f"  Memory checkpoint labels (power-of-2): {memory_checkpoints}")
     
     print(f"  Number of checkpoints: {num_checkpoints}")
     print(f"  Using equal spacing: checkpoint indices {list(checkpoint_indices)}")

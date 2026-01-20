@@ -207,15 +207,12 @@ vector<uint64_t> calculate_shrinking_memory_checkpoints(uint64_t m1_bytes, uint6
 {
     vector<uint64_t> checkpoints;
 
-    // Round M1 to nearest power of 2 for clean progression
-    uint64_t m1_log2 = (uint64_t) round(log2((double) m1_bytes));
-    uint64_t m1_rounded = 1ULL << m1_log2;   // 2^m1_log2
+    // Find next power-of-2 below M1 (floor of log2)
+    uint64_t m1_log2 = (uint64_t) floor(log2((double) m1_bytes));
+    uint64_t m1_power_of_2 = 1ULL << m1_log2;   // 2^m1_log2
 
-    // Start with rounded M1
-    checkpoints.push_back(m1_rounded);
-
-    // Generate power-of-2 checkpoints by halving: M1 -> M1/2 -> M1/4 -> ... -> M2
-    uint64_t current = m1_rounded / 2;
+    // Generate power-of-2 checkpoints by halving: next_pow2 -> next_pow2/2 -> ... -> M2
+    uint64_t current = m1_power_of_2;
     while (current >= m2_bytes)
     {
         checkpoints.push_back(current);
@@ -508,43 +505,46 @@ void run_expansion_shrinking_experiment(
             cout << "  DS: " << ds_cp.throughput_mops << " Mops, Query: " << ds_cp.query_throughput_mops << " Mops, " << ds_cp.memory_kb << " KB, ARE=" << ds_cp.are
                  << ", AAE=" << ds_cp.aae << endl;
 
-            // Expand sketches based on interval
-            current_target_memory += memory_increment_bytes;
-
-            uint32_t new_rs_width = calculate_width_from_memory_resketch(current_target_memory, rs_config.depth, rs_config.kll_k);
-            uint32_t new_gs_width = calculate_width_from_memory_geometric(current_target_memory, gs_config.depth);
-
-            // CountMin: cannot expand (do nothing)
-
-            // ReSketch: expand by memory_increment_kb
-            rs_sketch.expand(new_rs_width);
-            rs_conf.width = new_rs_width;
-
-            // GeometricSketch: expand by memory_increment_kb
-            gs_sketch.expand(new_gs_width);
-            gs_conf.width = new_gs_width;
-
-            // Expand shrinking sketches too
-            rs_shrink_no_data.expand(new_rs_width);
-            rs_shrink_no_data_conf.width = new_rs_width;
-
-            rs_shrink_with_data.expand(new_rs_width);
-            rs_shrink_with_data_conf.width = new_rs_width;
-
-            gs_shrink_no_data.expand(new_gs_width);
-            gs_shrink_no_data_conf.width = new_gs_width;
-
-            gs_shrink_with_data.expand(new_gs_width);
-            gs_shrink_with_data_conf.width = new_gs_width;
-
-            // DynamicSketch doubles when budget allows
-            ds_accumulated_budget += memory_increment_bytes;
-            if (ds_accumulated_budget >= ds_last_expansion_size)
+            // Expand sketches based on interval (only if more items to process)
+            if (items_processed < config.expansion_items)
             {
-                // DynamicSketch internally tracks width and doubles it
-                ds_sketch.expand(ds_last_expansion_size * 2 / (ds_config.depth * sizeof(uint32_t)));
-                ds_accumulated_budget = 0;
-                ds_last_expansion_size *= 2;
+                current_target_memory += memory_increment_bytes;
+
+                uint32_t new_rs_width = calculate_width_from_memory_resketch(current_target_memory, rs_config.depth, rs_config.kll_k);
+                uint32_t new_gs_width = calculate_width_from_memory_geometric(current_target_memory, gs_config.depth);
+
+                // CountMin: cannot expand (do nothing)
+
+                // ReSketch: expand by memory_increment_kb
+                rs_sketch.expand(new_rs_width);
+                rs_conf.width = new_rs_width;
+
+                // GeometricSketch: expand by memory_increment_kb
+                gs_sketch.expand(new_gs_width);
+                gs_conf.width = new_gs_width;
+
+                // Expand shrinking sketches too
+                rs_shrink_no_data.expand(new_rs_width);
+                rs_shrink_no_data_conf.width = new_rs_width;
+
+                rs_shrink_with_data.expand(new_rs_width);
+                rs_shrink_with_data_conf.width = new_rs_width;
+
+                gs_shrink_no_data.expand(new_gs_width);
+                gs_shrink_no_data_conf.width = new_gs_width;
+
+                gs_shrink_with_data.expand(new_gs_width);
+                gs_shrink_with_data_conf.width = new_gs_width;
+
+                // DynamicSketch doubles when budget allows
+                ds_accumulated_budget += memory_increment_bytes;
+                if (ds_accumulated_budget >= ds_last_expansion_size)
+                {
+                    // DynamicSketch internally tracks width and doubles it
+                    ds_sketch.expand(ds_last_expansion_size * 2 / (ds_config.depth * sizeof(uint32_t)));
+                    ds_accumulated_budget = 0;
+                    ds_last_expansion_size *= 2;
+                }
             }
         }
 
@@ -579,7 +579,7 @@ void run_expansion_shrinking_experiment(
         for (auto cp : gs_memory_checkpoints) cout << cp / 1024 << " KB ";
         cout << endl;
 
-        // Loop through checkpoints and shrink (start from index 0 to include first checkpoint)
+        // Loop through checkpoints and shrink (M1 already recorded in expansion phase)
         size_t max_checkpoints = max(rs_memory_checkpoints.size(), gs_memory_checkpoints.size());
         for (size_t i = 0; i < max_checkpoints; ++i)
         {
@@ -647,7 +647,7 @@ void run_expansion_shrinking_experiment(
             all_results["GeometricSketch_ShrinkNoData"][rep].push_back(gs_no_data_cp);
 
             // Print checkpoint info
-            cout << "Shrinking NoData checkpoint " << (i + 1) << ":" << endl;
+            cout << "Shrinking NoData checkpoint " << i << " -> " << (rs_memory_checkpoints[i] / 1024) << " KB:" << endl;
             cout << "  RS: Query: " << rs_no_data_cp.query_throughput_mops << " Mops, " << rs_no_data_cp.memory_kb << " KB, ARE=" << rs_no_data_cp.are
                  << ", AAE=" << rs_no_data_cp.aae << endl;
             cout << "  GS: Query: " << gs_no_data_cp.query_throughput_mops << " Mops, " << gs_no_data_cp.memory_kb << " KB, ARE=" << gs_no_data_cp.are
@@ -663,15 +663,16 @@ void run_expansion_shrinking_experiment(
              << " KB -> M0=" << config.m0_kb << " KB) ---" << endl;
 
         // Use ReSketch intervals as standard for all sketches
-        // Number of intervals = number of checkpoints (process items then shrink to each checkpoint)
-        vector<uint64_t> standard_item_intervals = calculate_geometric_item_intervals(config.shrinking_items, rs_memory_checkpoints.size());
+        // Number of intervals = number of shrinking checkpoints
+        size_t num_shrinking_checkpoints = rs_memory_checkpoints.size();
+        vector<uint64_t> standard_item_intervals = calculate_geometric_item_intervals(config.shrinking_items, num_shrinking_checkpoints);
 
-        cout << "Standard item intervals (based on ReSketch checkpoints): ";
+        cout << "Standard item intervals (based on ReSketch shrinking checkpoints): ";
         for (auto items : standard_item_intervals) cout << items << " ";
         cout << endl;
 
-        cout << "ReSketch will process through all " << rs_memory_checkpoints.size() << " intervals" << endl;
-        cout << "GeometricSketch will process through first " << gs_memory_checkpoints.size() << " intervals" << endl;
+        cout << "ReSketch will process through all " << num_shrinking_checkpoints << " shrinking intervals" << endl;
+        cout << "GeometricSketch will process through first " << min(num_shrinking_checkpoints, gs_memory_checkpoints.size()) << " shrinking intervals" << endl;
 
         uint64_t shrink_items_processed = 0;
 
@@ -706,7 +707,7 @@ void run_expansion_shrinking_experiment(
 
             bool gs_cannot_shrink = false;
 
-            // Shrink ReSketch to checkpoint at interval_idx (process items, then shrink)
+            // Shrink ReSketch to checkpoint at interval_idx
             size_t checkpoint_idx = interval_idx;
             if (checkpoint_idx < rs_memory_checkpoints.size())
             {
@@ -719,7 +720,7 @@ void run_expansion_shrinking_experiment(
                 }
             }
 
-            // Shrink GeometricSketch to next checkpoint
+            // Shrink GeometricSketch to checkpoint at interval_idx
             if (checkpoint_idx < gs_memory_checkpoints.size())
             {
                 uint64_t target_memory = gs_memory_checkpoints[checkpoint_idx];
