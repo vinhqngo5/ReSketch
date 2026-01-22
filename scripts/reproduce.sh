@@ -5,16 +5,16 @@ sensitivity_args=(
   "--app.dataset_type caida"
   "--app.repetitions 30"
   "--app.total_items 10000000"
-  "--app.stream_size 10000000"
+  "--app.stream_size 20000000"
 )
 
 expansion_args=(
   "--app.dataset_type caida"
   "--app.repetitions 30"
   "--app.memory_increment_kb 8"
-  "--app.initial_memory_kb 32"
+  "--app.initial_memory_kb 64"
   "--app.expansion_interval 100000"
-  "--app.total_items 30000000"
+  "--app.total_items 10000000"
   "--app.stream_size 20000000"
 )
 
@@ -22,38 +22,38 @@ shrinking_args=(
   "--app.dataset_type caida"
   "--app.repetitions 30"
   "--app.initial_memory_kb 64"
-  "--app.max_memory_kb 160"
-  "--app.final_memory_kb 32"
+  "--app.max_memory_kb 864"
+  "--app.final_memory_kb 16"
   "--app.memory_decrement_kb 8"
   "--app.shrinking_interval 100000"
-  "--app.total_items 3000000"
-  "--app.stream_size 3000000"
+  "--app.total_items 1000000"
+  "--app.stream_size 2000000"
 )
 
 merge_args=(
   "--app.dataset_type caida"
   "--app.repetitions 30"
-  "--app.memory_budget_kb 32"
+  "--app.memory_budget_kb 64"
   "--app.stream_size 10000000"
 )
 
 split_args=(
   "--app.dataset_type caida"
   "--app.repetitions 30"
-  "--app.memory_budget_kb 32"
+  "--app.memory_budget_kb 64"
   "--app.stream_size 10000000"
 )
 
 expansion_shrinking_args=(
   "--app.dataset_type caida"
   "--app.repetitions 30"
-  "--app.m0_kb 32"
+  "--app.m0_kb 64"
   "--app.m2_kb 16"
   "--app.memory_increment_kb 8"
   "--app.expansion_interval 100000"
   "--app.expansion_items 10000000"
   "--app.shrinking_items 3000000"
-  "--app.stream_size 10000000"
+  "--app.stream_size 20000000"
 )
 
 dag_args=(
