@@ -94,6 +94,17 @@ struct PartitionResult
     AccuracyMetrics a_vs_true_on_da;         // A (direct) vs true frequencies on DA
     AccuracyMetrics b_vs_true_on_db;         // B (direct) vs true frequencies on DB
     AccuracyMetrics c_vs_true_on_all;        // C (full) vs true frequencies on All
+
+    struct ItemFrequency
+    {
+        uint64_t key;
+        uint64_t frequency;
+        double estimated_frequency;
+    };
+    vector<ItemFrequency> a_item_frequencies;
+    vector<ItemFrequency> b_item_frequencies;
+    vector<ItemFrequency> a_prime_item_frequencies;
+    vector<ItemFrequency> b_prime_item_frequencies;
 };
 
 void export_to_json(const string &filename, const PartitionConfig &app_config, const ReSketchConfig &rs_config, const vector<PartitionResult> &results)
@@ -152,6 +163,29 @@ void export_to_json(const string &filename, const PartitionConfig &app_config, c
               {"aae", result.c_vs_true_on_all.aae},
               {"are_variance", result.c_vs_true_on_all.are_variance},
               {"aae_variance", result.c_vs_true_on_all.aae_variance}}}};
+
+        rep_json["a_frequencies"] = json::array();
+        rep_json["a_prime_frequencies"] = json::array();
+        rep_json["b_frequencies"] = json::array();
+        rep_json["b_prime_frequencies"] = json::array();
+
+        for (auto &&[frequencies, output_name] : {
+            pair{&result.a_item_frequencies, "a_frequencies"},
+            pair{&result.a_prime_item_frequencies, "a_prime_frequencies"},
+            pair{&result.b_item_frequencies, "b_frequencies"},
+            pair{&result.a_prime_item_frequencies, "b_prime_frequencies"},
+        })
+        {
+            for (const auto &[key, frequency, estimated_frequency] : *frequencies)
+            {
+                rep_json[output_name].push_back({
+                    {"key", key},
+                    {"freq", frequency},
+                    {"est", estimated_frequency},
+                });
+            }
+        }
+
         j["results"].push_back(rep_json);
     }
 
@@ -401,6 +435,22 @@ void run_partition_experiment(const PartitionConfig &config, const ReSketchConfi
         result.c_vs_true_on_all.are_variance = calculate_are_variance(sketch_C, true_freqs_all, result.c_vs_true_on_all.are);
         result.c_vs_true_on_all.aae_variance = calculate_aae_variance(sketch_C, true_freqs_all, result.c_vs_true_on_all.aae);
         cout << format("  C (full) vs True on All: ARE={}, AAE={}\n", result.c_vs_true_on_all.are, result.c_vs_true_on_all.aae);
+
+        result.a_item_frequencies.reserve(true_freqs_A.size());
+        result.a_prime_item_frequencies.reserve(true_freqs_A.size());
+        result.b_item_frequencies.reserve(true_freqs_B.size());
+        result.b_prime_item_frequencies.reserve(true_freqs_B.size());
+
+        for (auto &[key, true_freq] : true_freqs_A)
+        {
+            result.a_item_frequencies.push_back({key, true_freq, sketch_A.estimate(key)});
+            result.a_prime_item_frequencies.push_back({key, true_freq, sketch_A_prime.estimate(key)});
+        }
+        for (auto &[key, true_freq] : true_freqs_B)
+        {
+            result.b_item_frequencies.push_back({key, true_freq, sketch_B.estimate(key)});
+            result.b_prime_item_frequencies.push_back({key, true_freq, sketch_B_prime.estimate(key)});
+        }
 
         all_results.push_back(result);
     }

@@ -1,12 +1,18 @@
 import argparse
+from itertools import batched
+from typing import NamedTuple
+
 import matplotlib.pyplot as plt
 import numpy as np
 
+from visualize_merge import calculate_accuracy_data
 from visualization_common import (
+    create_shared_legend,
     load_material_colors,
     load_results,
     setup_fonts,
     save_figure,
+    style_axis,
 )
 
 
@@ -201,6 +207,130 @@ def plot_results(results_data, output_path, show_within_variance=True):
 
     save_figure(fig, output_path)
 
+
+def plot_accuracy_per_key(results_data: dict, output_path):
+    material_colors = load_material_colors("scripts/colors/material-colors.json")
+
+    font_config = setup_fonts(__file__)
+
+    class TraceConfig(NamedTuple):
+        dataset_name: str
+        label: str
+        color: str
+        linestyle: str = "-"
+        linewidth: float = 1.5
+        alpha: float = 0.7
+
+    class PlotConfig(NamedTuple):
+        xlabel: str
+        ylabel: str
+        result_data_key: str
+        traces: list[TraceConfig]
+
+    plots = [
+        PlotConfig(
+            xlabel="Item Rank",
+            ylabel="Relative Error",
+            result_data_key="rel_err",
+            traces=[
+                TraceConfig(
+                    "a_frequencies",
+                    "A (direct) on DA",
+                    color=material_colors["green"]["500"],
+                ),
+                TraceConfig(
+                    "a_prime_frequencies",
+                    "A' (partitioned) on DA",
+                    color=material_colors["green"]["500"],
+                    linestyle="--",
+                ),
+            ],
+        ),
+        PlotConfig(
+            xlabel="Item Rank",
+            ylabel="Relative Error",
+            result_data_key="rel_err",
+            traces=[
+                TraceConfig(
+                    "b_frequencies",
+                    "B (direct) on DB",
+                    color=material_colors["blue"]["500"],
+                ),
+                TraceConfig(
+                    "b_prime_frequencies",
+                    "B' (partitioned) on DB",
+                    color=material_colors["blue"]["500"],
+                    linestyle="--",
+                ),
+            ],
+        ),
+        PlotConfig(
+            xlabel="Item Rank",
+            ylabel="Absolute Error",
+            result_data_key="abs_err",
+            traces=[
+                TraceConfig(
+                    "a_frequencies",
+                    "A (direct) on DA",
+                    color=material_colors["green"]["500"],
+                ),
+                TraceConfig(
+                    "a_prime_frequencies",
+                    "A' (partitioned) on DA",
+                    color=material_colors["green"]["500"],
+                    linestyle="--",
+                ),
+            ],
+        ),
+        PlotConfig(
+            xlabel="Item Rank",
+            ylabel="Absolute Error",
+            result_data_key="abs_err",
+            traces=[
+                TraceConfig(
+                    "b_frequencies",
+                    "B (direct) on DB",
+                    color=material_colors["blue"]["500"],
+                ),
+                TraceConfig(
+                    "b_prime_frequencies",
+                    "B' (partitioned) on DB",
+                    material_colors["blue"]["500"],
+                    linestyle="--",
+                ),
+            ],
+        ),
+    ]
+
+    def moving_average(x, window_size: int = 1000):
+        return np.convolve(x, np.ones(window_size)/window_size, mode='valid')
+
+    fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(6, 5))
+
+    # for row_idx, plot in enumerate(plots):
+    for row_idx, row_plots in enumerate(batched(plots, 2)):
+        for col_idx, plot in enumerate(row_plots):
+            ax = axs[row_idx, col_idx]
+            for trace in plot.traces:
+                trace_data = moving_average([d[plot.result_data_key] for d in results_data[trace.dataset_name]])
+                ax.plot(
+                    trace_data,
+                    color=trace.color,
+                    linestyle=trace.linestyle,
+                    linewidth=trace.linewidth,
+                    label=trace.label,
+                    alpha=trace.alpha,
+                )
+            style_axis(ax, font_config, plot.ylabel, plot.xlabel)
+
+    create_shared_legend(fig, axs[0, 0], ncol=4, font_config=font_config,
+                         bbox_to_anchor=(0.5, 1.02), top_adjust=0.96)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+
+    save_figure(fig, output_path)
+
+
 def print_summary(results_data):
     config = results_data['config']
     aggregated = aggregate_results(results_data)
@@ -289,7 +419,16 @@ def main():
     print_summary(results_data)
 
     print(f"Show within-run variance: {args.show_within_variance}")
-    plot_results(results_data, args.output, show_within_variance=args.show_within_variance)
+    # plot_results(results_data, args.output, show_within_variance=args.show_within_variance)
+
+    # Plot accuracy of partitioned vs directly sketched
+    final_repetition_data = results_data["results"][-1]
+    calculate_accuracy_data(final_repetition_data, "a_frequencies")
+    calculate_accuracy_data(final_repetition_data, "a_prime_frequencies")
+    calculate_accuracy_data(final_repetition_data, "b_frequencies")
+    calculate_accuracy_data(final_repetition_data, "b_prime_frequencies")
+    plot_accuracy_per_key(final_repetition_data, args.output)
+
 
 if __name__ == '__main__':
     main()
