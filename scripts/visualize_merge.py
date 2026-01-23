@@ -222,7 +222,6 @@ def plot_accuracy_per_key(results_data: dict, output_path):
     font_config = setup_fonts(__file__)
 
     class TraceConfig(NamedTuple):
-        # dataset: list
         dataset_name: str
         label: str
         color: str
@@ -338,7 +337,7 @@ def main():
     parser.add_argument(
         '-o', '--output',
         type=str,
-        default=None,
+        default="output/merge_results",
         help='Output path (without extension, will generate .png and .pdf). '
              'Default: output/merge_results'
     )
@@ -355,7 +354,7 @@ def main():
 
     print_summary(results_data)
 
-    output_path = args.output if args.output else 'output/merge_results'
+    # output_path = args.output if args.output else 'output/merge_results'
     # print(f"Show within-run variance: {args.show_within_variance}")
     # plot_results(results_data, output_path, show_within_variance=args.show_within_variance)
 
@@ -363,7 +362,7 @@ def main():
     final_repetition_data = results_data["results"][-1]
     calculate_accuracy_data(final_repetition_data, "c_frequencies")
     calculate_accuracy_data(final_repetition_data, "d_frequencies")
-    plot_accuracy_per_key(final_repetition_data, output_path)
+    plot_accuracy_per_key(final_repetition_data, args.output)
 
 
 if __name__ == '__main__':
