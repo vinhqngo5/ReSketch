@@ -50,6 +50,21 @@ def aggregate_results(results_data):
     return aggregated
 
 
+def filter_accuracy_data_partition_only(
+    results_data, sketch_c_accuracy_data: str, partition_acc_data: str
+):
+    """
+    Filter sketch C accuracy data to only include data from the `partition_data` partition range.
+    """
+    c_acc_data = results_data[sketch_c_accuracy_data]
+    partition_acc_data = results_data[partition_acc_data]
+
+    c_acc_dict = {item["key"]: item for item in c_acc_data}
+    output = [c_acc_dict[item["key"]] for item in partition_acc_data]
+    output.sort(key=lambda item_data: item_data["freq"], reverse=True)
+    return output
+
+
 def plot_results(results_data, output_path, show_within_variance=True):
     material_colors = load_material_colors("scripts/colors/material-colors.json")
 
@@ -244,6 +259,12 @@ def plot_accuracy_per_key(results_data: dict, output_path):
                     color=material_colors["green"]["500"],
                     linestyle="--",
                 ),
+                TraceConfig(
+                    "c_frequencies_da",
+                    "C (direct) on DA",
+                    color=material_colors["purple"]["500"],
+                    linestyle="dotted",
+                ),
             ],
         ),
         PlotConfig(
@@ -261,6 +282,12 @@ def plot_accuracy_per_key(results_data: dict, output_path):
                     "B' (partitioned) on DB",
                     color=material_colors["blue"]["500"],
                     linestyle="--",
+                ),
+                TraceConfig(
+                    "c_frequencies_db",
+                    "C (direct) on DB",
+                    color=material_colors["purple"]["500"],
+                    linestyle="dotted",
                 ),
             ],
         ),
@@ -280,6 +307,12 @@ def plot_accuracy_per_key(results_data: dict, output_path):
                     color=material_colors["green"]["500"],
                     linestyle="--",
                 ),
+                TraceConfig(
+                    "c_frequencies_da",
+                    "C (direct) on DA",
+                    color=material_colors["purple"]["500"],
+                    linestyle="dotted",
+                ),
             ],
         ),
         PlotConfig(
@@ -298,6 +331,12 @@ def plot_accuracy_per_key(results_data: dict, output_path):
                     material_colors["blue"]["500"],
                     linestyle="--",
                 ),
+                TraceConfig(
+                    "c_frequencies_db",
+                    "C (direct) on DB",
+                    color=material_colors["purple"]["500"],
+                    linestyle="dotted",
+                ),
             ],
         ),
     ]
@@ -305,7 +344,7 @@ def plot_accuracy_per_key(results_data: dict, output_path):
     def moving_average(x, window_size: int = 1000):
         return np.convolve(x, np.ones(window_size)/window_size, mode='valid')
 
-    fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(6, 5))
+    fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(6, 3))
 
     # for row_idx, plot in enumerate(plots):
     for row_idx, row_plots in enumerate(batched(plots, 2)):
@@ -323,8 +362,10 @@ def plot_accuracy_per_key(results_data: dict, output_path):
                 )
             style_axis(ax, font_config, plot.ylabel, plot.xlabel)
 
-    create_shared_legend(fig, axs[0, 0], ncol=4, font_config=font_config,
-                         bbox_to_anchor=(0.5, 1.02), top_adjust=0.96)
+    create_shared_legend(fig, axs[0, 0], ncol=1, font_config=font_config,
+                         bbox_to_anchor=(0.3, 1.17), top_adjust=0.96)
+    create_shared_legend(fig, axs[0, 1], ncol=1, font_config=font_config,
+                         bbox_to_anchor=(0.8, 1.17), top_adjust=0.96)
 
     plt.tight_layout(rect=[0, 0, 1, 0.96])
 
@@ -427,6 +468,9 @@ def main():
     calculate_accuracy_data(final_repetition_data, "a_prime_frequencies")
     calculate_accuracy_data(final_repetition_data, "b_frequencies")
     calculate_accuracy_data(final_repetition_data, "b_prime_frequencies")
+    calculate_accuracy_data(final_repetition_data, "c_frequencies")
+    final_repetition_data["c_frequencies_da"] = filter_accuracy_data_partition_only(final_repetition_data, "c_frequencies", "a_frequencies")
+    final_repetition_data["c_frequencies_db"] = filter_accuracy_data_partition_only(final_repetition_data, "c_frequencies", "b_frequencies")
     plot_accuracy_per_key(final_repetition_data, args.output)
 
 
