@@ -126,7 +126,7 @@ def plot_results(aggregated, output_path, memory_budget_kb, show_within_variance
             Plot("ARE within-var", "are_within_var_mean", "are_within_var_std"),
             Plot("AAE within-var", "aae_within_var_mean", "aae_within_var_std"),
         ])
-    fig_width = 3.33
+    fig_width = 3.33 * 1.38
     fig_height = 5
     fig, axes = plt.subplots(3, 2, figsize=(fig_width, fig_height))
     axes = axes.flatten()
@@ -170,7 +170,7 @@ def plot_results(aggregated, output_path, memory_budget_kb, show_within_variance
                    fontfamily=font_config['family'])
 
         if plot.mean_col_name == 'aae_within_var_mean':
-            ax.text(0.25, 1.02, '×10⁴', transform=ax.transAxes,
+            ax.text(0.12, 1.02, '×10⁴', transform=ax.transAxes,
                    fontsize=font_config['tick_size'], va='bottom', ha='right',
                    fontfamily=font_config['family'])
 
@@ -178,7 +178,7 @@ def plot_results(aggregated, output_path, memory_budget_kb, show_within_variance
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels,
               loc='upper center',
-              bbox_to_anchor=(0.55, 0.98),
+              bbox_to_anchor=(0.5, 0.98),
               ncol=2,
               fontsize=font_config['legend_size'],
               frameon=False,
@@ -187,8 +187,8 @@ def plot_results(aggregated, output_path, memory_budget_kb, show_within_variance
               columnspacing=1.0,
               prop={'family': font_config['family']})
 
-    plt.tight_layout(rect=[0, 0, 1, 0.87])
-    plt.subplots_adjust(hspace=0.3, wspace=0.35)
+    plt.tight_layout(rect=[0, 0, 1, 0.88])
+    plt.subplots_adjust(hspace=0.3, wspace=0.25)
     
     save_figure(fig, output_path)
 
