@@ -53,7 +53,20 @@ visualize_if_exists_with_plot_every "shrinking" 4
 visualize_if_exists_with_plot_every "expansion_shrinking" 4
 visualize_if_exists "merge"
 visualize_if_exists "split"
-visualize_if_exists "sensitivity"
+
+# Sensitivity with specific memory budget
+if [ -f "${FOLDER}/sensitivity_results.json" ]; then
+    echo "Visualizing sensitivity..."
+    python "scripts/visualize_sensitivity_single.py" --input "${FOLDER}/sensitivity_results.json" --output "${FOLDER}/sensitivity" --show-within-variance --memory-budget 64 2>&1
+    if [ $? -eq 0 ]; then
+        echo "sensitivity visualization complete"
+    else
+        echo "sensitivity visualization failed"
+    fi
+else
+    echo "No sensitivity_results.json found, skipping"
+fi
+
 visualize_if_exists "dag"
 
 echo ""
