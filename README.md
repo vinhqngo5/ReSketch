@@ -45,9 +45,9 @@ cmake --build build/release -j$(nproc)
 ./build/release/bin/release/merge_experiment -h
 ./build/release/bin/release/merge_experiment
 
-# Example: Run split experiment
-./build/release/bin/release/split_experiment -h
-./build/release/bin/release/split_experiment
+# Example: Run partition experiment
+./build/release/bin/release/partition_experiment -h
+./build/release/bin/release/partition_experiment
 
 # Example: Run DAG experiment
 ./build/release/bin/release/dag_experiment -h
@@ -65,8 +65,8 @@ python3 scripts/visualize_shrinking.py --input output/shrinking_results_*.json -
 # Visualize merge results
 python3 scripts/visualize_merge.py --input output/merge_results_*.json --output merge.png
 
-# Visualize split results
-python3 scripts/visualize_split.py --input output/split_results_*.json --output split.png
+# Visualize partition results
+python3 scripts/visualize_partition.py --input output/partition_results_*.json --output partition.png
 
 # Visualize DAG results
 python3 scripts/visualize_dag_results.py --input output/dag_results_*.json --output dag.png
@@ -74,9 +74,9 @@ python3 scripts/visualize_dag_results.py --input output/dag_results_*.json --out
 
 ### Run and Visualize All Experiments
 ```bash
-./scripts/run_all_experiments.sh
+./scripts/run_experiment.sh all
 ```
-This will run and visualize all experiments (expansion, merge, split, shrinking, sensitivity) and save results to `output/run_all_<timestamp>/`.
+This will run and visualize all experiments (expansion, merge, partition, shrinking, sensitivity) using default settings and save results to `output/run_all_<timestamp>/`.
 
 ## Requirements
 

@@ -1,21 +1,24 @@
 import argparse
-import sys
-from pathlib import Path
+from itertools import batched
+from typing import NamedTuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 
+from visualize_merge import calculate_accuracy_data
 from visualization_common import (
+    create_shared_legend,
+    load_material_colors,
     load_results,
     setup_fonts,
-    load_material_colors,
-    save_figure
+    save_figure,
+    style_axis,
 )
 
 
 def aggregate_results(results_data):
     results = results_data['results']
-    
+
     metrics = {
         'a_prime_vs_true_on_da': {'are': [], 'aae': [], 'are_var': [], 'aae_var': []},
         'b_prime_vs_true_on_db': {'are': [], 'aae': [], 'are_var': [], 'aae_var': []},
@@ -23,14 +26,14 @@ def aggregate_results(results_data):
         'b_vs_true_on_db': {'are': [], 'aae': [], 'are_var': [], 'aae_var': []},
         'c_vs_true_on_all': {'are': [], 'aae': [], 'are_var': [], 'aae_var': []}
     }
-    
+
     for rep in results:
         for key in metrics.keys():
             metrics[key]['are'].append(rep[key]['are'])
             metrics[key]['aae'].append(rep[key]['aae'])
             metrics[key]['are_var'].append(rep[key].get('are_variance', 0.0))
             metrics[key]['aae_var'].append(rep[key].get('aae_variance', 0.0))
-    
+
     aggregated = {}
     for key in metrics.keys():
         aggregated[key] = {
@@ -43,34 +46,49 @@ def aggregate_results(results_data):
             'aae_var_mean': np.mean(metrics[key]['aae_var']),
             'aae_var_std': np.std(metrics[key]['aae_var'])
         }
-    
+
     return aggregated
+
+
+def filter_accuracy_data_partition_only(
+    results_data, sketch_c_accuracy_data: str, partition_acc_data: str
+):
+    """
+    Filter sketch C accuracy data to only include data from the `partition_data` partition range.
+    """
+    c_acc_data = results_data[sketch_c_accuracy_data]
+    partition_acc_data = results_data[partition_acc_data]
+
+    c_acc_dict = {item["key"]: item for item in c_acc_data}
+    output = [c_acc_dict[item["key"]] for item in partition_acc_data]
+    output.sort(key=lambda item_data: item_data["freq"], reverse=True)
+    return output
 
 
 def plot_results(results_data, output_path, show_within_variance=True):
     material_colors = load_material_colors("scripts/colors/material-colors.json")
-    
+
     font_config = setup_fonts(__file__)
-    
+
     config = results_data['config']
     aggregated = aggregate_results(results_data)
-    
+
     num_cols = 4 if show_within_variance else 2
     fig, axes = plt.subplots(1, num_cols, figsize=(7*num_cols, 5))
-    
+
     if num_cols == 2:
         ax1, ax2 = axes
     else:
         ax1, ax2, ax3, ax4 = axes
-    
+
     labels = [
-        "A' (split)\non DA",
-        "B' (split)\non DB",
+        "A' (partitioned)\non DA",
+        "B' (partitioned)\non DB",
         "A (direct)\non DA",
         "B (direct)\non DB",
         "C (full)\non All"
     ]
-    
+
     keys = [
         'a_prime_vs_true_on_da',
         'b_prime_vs_true_on_db',
@@ -78,26 +96,26 @@ def plot_results(results_data, output_path, show_within_variance=True):
         'b_vs_true_on_db',
         'c_vs_true_on_all'
     ]
-    
+
     colors = [
-        material_colors['blue']['500'],      # A' (split)
-        material_colors['blue']['500'],      # B' (split)
+        material_colors['blue']['500'],      # A' (partitioned)
+        material_colors['blue']['500'],      # B' (partitioned)
         material_colors['green']['500'],     # A (direct)
         material_colors['green']['500'],     # B (direct)
         material_colors['purple']['500']
     ]
-    
+
     x_pos = np.arange(len(labels))
     bar_width = 0.6
-    
+
     are_means = [aggregated[key]['are_mean'] for key in keys]
     are_stds = [aggregated[key]['are_std'] for key in keys]
     are_var_means = [aggregated[key]['are_var_mean'] for key in keys]
-    
+
     bars1 = ax1.bar(x_pos, are_means, bar_width, yerr=are_stds,
                     color=colors, alpha=0.8, capsize=5,
                     error_kw={'linewidth': 1.5})
-    
+
     ax1.set_ylabel('Average Relative Error (ARE)', fontsize=12)
     ax1.set_xlabel('Sketch Configuration', fontsize=12)
     ax1.set_title('Accuracy: Average Relative Error', fontsize=13, fontweight='bold')
@@ -105,20 +123,20 @@ def plot_results(results_data, output_path, show_within_variance=True):
     ax1.set_xticklabels(labels, fontsize=10)
     ax1.grid(axis='y', alpha=0.3, linestyle='--')
     ax1.set_axisbelow(True)
-    
+
     for i, (bar, mean, std) in enumerate(zip(bars1, are_means, are_stds)):
         height = bar.get_height()
         ax1.text(bar.get_x() + bar.get_width()/2., height + std + 0.01,
                 f'{mean:.3f}±{std:.3f}',
                 ha='center', va='bottom', fontsize=8)
-    
+
     aae_means = [aggregated[key]['aae_mean'] for key in keys]
     aae_stds = [aggregated[key]['aae_std'] for key in keys]
-    
+
     bars2 = ax2.bar(x_pos, aae_means, bar_width, yerr=aae_stds,
                     color=colors, alpha=0.8, capsize=5,
                     error_kw={'linewidth': 1.5})
-    
+
     ax2.set_ylabel('Average Absolute Error (AAE)', fontsize=12)
     ax2.set_xlabel('Sketch Configuration', fontsize=12)
     ax2.set_title('Accuracy: Average Absolute Error', fontsize=13, fontweight='bold')
@@ -126,22 +144,22 @@ def plot_results(results_data, output_path, show_within_variance=True):
     ax2.set_xticklabels(labels, fontsize=10)
     ax2.grid(axis='y', alpha=0.3, linestyle='--')
     ax2.set_axisbelow(True)
-    
+
     for i, (bar, mean, std) in enumerate(zip(bars2, aae_means, aae_stds)):
         height = bar.get_height()
         ax2.text(bar.get_x() + bar.get_width()/2., height + std + 0.5,
                 f'{mean:.2f}±{std:.2f}',
                 ha='center', va='bottom', fontsize=8)
-    
+
     # ARE variance plots
     if show_within_variance:
         are_var_means = [aggregated[key]['are_var_mean'] for key in keys]
         are_var_stds = [aggregated[key]['are_var_std'] for key in keys]
-        
+
         bars3 = ax3.bar(x_pos, are_var_means, bar_width, yerr=are_var_stds,
                         color=colors, alpha=0.8, capsize=5,
                         error_kw={'linewidth': 1.5})
-        
+
         ax3.set_ylabel('ARE Within-Run Variance', fontsize=12)
         ax3.set_xlabel('Sketch Configuration', fontsize=12)
         ax3.set_title('Within-Run Variance: ARE', fontsize=13, fontweight='bold')
@@ -149,21 +167,21 @@ def plot_results(results_data, output_path, show_within_variance=True):
         ax3.set_xticklabels(labels, fontsize=10)
         ax3.grid(axis='y', alpha=0.3, linestyle='--')
         ax3.set_axisbelow(True)
-        
+
         for i, (bar, mean, std) in enumerate(zip(bars3, are_var_means, are_var_stds)):
             height = bar.get_height()
             ax3.text(bar.get_x() + bar.get_width()/2., height + std + 0.005,
                     f'{mean:.3f}±{std:.3f}',
                     ha='center', va='bottom', fontsize=8)
-        
+
         # AAE variance plots
         aae_var_means = [aggregated[key]['aae_var_mean'] for key in keys]
         aae_var_stds = [aggregated[key]['aae_var_std'] for key in keys]
-        
+
         bars4 = ax4.bar(x_pos, aae_var_means, bar_width, yerr=aae_var_stds,
                         color=colors, alpha=0.8, capsize=5,
                         error_kw={'linewidth': 1.5})
-        
+
         ax4.set_ylabel('AAE Within-Run Variance', fontsize=12)
         ax4.set_xlabel('Sketch Configuration', fontsize=12)
         ax4.set_title('Within-Run Variance: AAE', fontsize=13, fontweight='bold')
@@ -171,46 +189,196 @@ def plot_results(results_data, output_path, show_within_variance=True):
         ax4.set_xticklabels(labels, fontsize=10)
         ax4.grid(axis='y', alpha=0.3, linestyle='--')
         ax4.set_axisbelow(True)
-        
+
         for i, (bar, mean, std) in enumerate(zip(bars4, aae_var_means, aae_var_stds)):
             height = bar.get_height()
             ax4.text(bar.get_x() + bar.get_width()/2., height + std + 0.5,
                     f'{mean:.2f}±{std:.2f}',
                     ha='center', va='bottom', fontsize=8)
-    
+
     for i, (bar, mean, std) in enumerate(zip(bars2, aae_means, aae_stds)):
         height = bar.get_height()
         ax2.text(bar.get_x() + bar.get_width()/2., height + std,
                 f'{mean:.1f}',
                 ha='center', va='bottom', fontsize=8)
-    
+
     exp_config = config.get('experiment', config)
     sketch_config = config.get('base_sketch_config', {}).get('resketch', {})
-    
+
     depth = sketch_config.get('depth', config.get('resketch_depth', 4))
     kll_k = sketch_config.get('kll_k', config.get('resketch_kll_k', 10))
     memory_kb = exp_config.get('memory_budget_kb', config.get('memory_budget_kb', 32))
     diversity = exp_config.get('stream_diversity', config.get('stream_diversity', 1000000))
     zipf = exp_config.get('zipf_param', config.get('zipf_param', 1.1))
-    
-    suptitle = (f"ReSketchV2 Split Experiment: "
+
+    suptitle = (f"ReSketchV2 Partition Experiment: "
                 f"depth={depth}, k={kll_k}, "
                 f"memory={memory_kb}KB, "
                 f"diversity={diversity}, "
                 f"zipf={zipf:.2f}")
     fig.suptitle(suptitle, fontsize=11, y=0.98)
-    
+
     plt.tight_layout(rect=[0, 0, 1, 0.96])
-    
+
     save_figure(fig, output_path)
+
+
+def plot_accuracy_per_key(results_data: dict, output_path):
+    material_colors = load_material_colors("scripts/colors/material-colors.json")
+
+    font_config = setup_fonts(__file__)
+
+    class TraceConfig(NamedTuple):
+        dataset_name: str
+        label: str
+        color: str
+        linestyle: str = "-"
+        linewidth: float = 1.5
+        alpha: float = 0.7
+
+    class PlotConfig(NamedTuple):
+        xlabel: str
+        ylabel: str
+        result_data_key: str
+        traces: list[TraceConfig]
+
+    plots = [
+        PlotConfig(
+            xlabel="Item Rank",
+            ylabel="Relative Error",
+            result_data_key="rel_err",
+            traces=[
+                TraceConfig(
+                    "a_frequencies",
+                    "A (direct) on DA",
+                    color=material_colors["green"]["500"],
+                ),
+                TraceConfig(
+                    "a_prime_frequencies",
+                    "A' (partitioned) on DA",
+                    color=material_colors["green"]["500"],
+                    linestyle="--",
+                ),
+                TraceConfig(
+                    "c_frequencies_da",
+                    "C (direct) on DA",
+                    color=material_colors["purple"]["500"],
+                    linestyle="dotted",
+                ),
+            ],
+        ),
+        PlotConfig(
+            xlabel="Item Rank",
+            ylabel="Relative Error",
+            result_data_key="rel_err",
+            traces=[
+                TraceConfig(
+                    "b_frequencies",
+                    "B (direct) on DB",
+                    color=material_colors["blue"]["500"],
+                ),
+                TraceConfig(
+                    "b_prime_frequencies",
+                    "B' (partitioned) on DB",
+                    color=material_colors["blue"]["500"],
+                    linestyle="--",
+                ),
+                TraceConfig(
+                    "c_frequencies_db",
+                    "C (direct) on DB",
+                    color=material_colors["purple"]["500"],
+                    linestyle="dotted",
+                ),
+            ],
+        ),
+        PlotConfig(
+            xlabel="Item Rank",
+            ylabel="Absolute Error",
+            result_data_key="abs_err",
+            traces=[
+                TraceConfig(
+                    "a_frequencies",
+                    "A (direct) on DA",
+                    color=material_colors["green"]["500"],
+                ),
+                TraceConfig(
+                    "a_prime_frequencies",
+                    "A' (partitioned) on DA",
+                    color=material_colors["green"]["500"],
+                    linestyle="--",
+                ),
+                TraceConfig(
+                    "c_frequencies_da",
+                    "C (direct) on DA",
+                    color=material_colors["purple"]["500"],
+                    linestyle="dotted",
+                ),
+            ],
+        ),
+        PlotConfig(
+            xlabel="Item Rank",
+            ylabel="Absolute Error",
+            result_data_key="abs_err",
+            traces=[
+                TraceConfig(
+                    "b_frequencies",
+                    "B (direct) on DB",
+                    color=material_colors["blue"]["500"],
+                ),
+                TraceConfig(
+                    "b_prime_frequencies",
+                    "B' (partitioned) on DB",
+                    material_colors["blue"]["500"],
+                    linestyle="--",
+                ),
+                TraceConfig(
+                    "c_frequencies_db",
+                    "C (direct) on DB",
+                    color=material_colors["purple"]["500"],
+                    linestyle="dotted",
+                ),
+            ],
+        ),
+    ]
+
+    def moving_average(x, window_size: int = 1000):
+        return np.convolve(x, np.ones(window_size)/window_size, mode='valid')
+
+    fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(6, 3))
+
+    # for row_idx, plot in enumerate(plots):
+    for row_idx, row_plots in enumerate(batched(plots, 2)):
+        for col_idx, plot in enumerate(row_plots):
+            ax = axs[row_idx, col_idx]
+            for trace in plot.traces:
+                trace_data = moving_average([d[plot.result_data_key] for d in results_data[trace.dataset_name]])
+                ax.plot(
+                    trace_data,
+                    color=trace.color,
+                    linestyle=trace.linestyle,
+                    linewidth=trace.linewidth,
+                    label=trace.label,
+                    alpha=trace.alpha,
+                )
+            style_axis(ax, font_config, plot.ylabel, plot.xlabel)
+
+    create_shared_legend(fig, axs[0, 0], ncol=1, font_config=font_config,
+                         bbox_to_anchor=(0.3, 1.17), top_adjust=0.96)
+    create_shared_legend(fig, axs[0, 1], ncol=1, font_config=font_config,
+                         bbox_to_anchor=(0.8, 1.17), top_adjust=0.96)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+
+    save_figure(fig, output_path)
+
 
 def print_summary(results_data):
     config = results_data['config']
     aggregated = aggregate_results(results_data)
-    
+
     exp_config = config.get('experiment', config)
     sketch_config = config.get('base_sketch_config', {}).get('resketch', {})
-    
+
     depth = sketch_config.get('depth', config.get('resketch_depth', 4))
     kll_k = sketch_config.get('kll_k', config.get('resketch_kll_k', 10))
     memory_kb = exp_config.get('memory_budget_kb', config.get('memory_budget_kb', 32))
@@ -218,9 +386,9 @@ def print_summary(results_data):
     diversity = exp_config.get('stream_diversity', config.get('stream_diversity', 1000000))
     stream_size = exp_config.get('stream_size', config.get('stream_size', 10000000))
     repetitions = exp_config.get('repetitions', config.get('repetitions', 1))
-    
+
     print("\n" + "="*60)
-    print("SPLIT EXPERIMENT SUMMARY")
+    print("PARTITION EXPERIMENT SUMMARY")
     print("="*60)
     print(f"\nConfiguration:")
     print(f"  ReSketch: depth={depth}, k={kll_k}")
@@ -228,32 +396,32 @@ def print_summary(results_data):
     print(f"  Dataset: {dataset}, diversity={diversity}")
     print(f"  Stream Size: {stream_size}")
     print(f"  Repetitions: {repetitions}")
-    
+
     print(f"\nAccuracy Results (mean ± std):")
-    print(f"\n  A' (split from C) on DA (items [0, {diversity//2})):")
+    print(f"\n  A' (partitioned from C) on DA (items [0, {diversity//2})):")
     print(f"    ARE: {aggregated['a_prime_vs_true_on_da']['are_mean']:.4f} ± {aggregated['a_prime_vs_true_on_da']['are_std']:.4f} (across runs)")
     print(f"    AAE: {aggregated['a_prime_vs_true_on_da']['aae_mean']:.2f} ± {aggregated['a_prime_vs_true_on_da']['aae_std']:.2f} (across runs)")
     print(f"    ARE within-run variance: {aggregated['a_prime_vs_true_on_da']['are_var_mean']:.4f} ± {aggregated['a_prime_vs_true_on_da']['are_var_std']:.4f}")
     print(f"    AAE within-run variance: {aggregated['a_prime_vs_true_on_da']['aae_var_mean']:.2f} ± {aggregated['a_prime_vs_true_on_da']['aae_var_std']:.2f}")
-    
-    print(f"\n  B' (split from C) on DB (items [{diversity//2}, {diversity})):")
+
+    print(f"\n  B' (partitioned from C) on DB (items [{diversity//2}, {diversity})):")
     print(f"    ARE: {aggregated['b_prime_vs_true_on_db']['are_mean']:.4f} ± {aggregated['b_prime_vs_true_on_db']['are_std']:.4f} (across runs)")
     print(f"    AAE: {aggregated['b_prime_vs_true_on_db']['aae_mean']:.2f} ± {aggregated['b_prime_vs_true_on_db']['aae_std']:.2f} (across runs)")
     print(f"    ARE within-run variance: {aggregated['b_prime_vs_true_on_db']['are_var_mean']:.4f} ± {aggregated['b_prime_vs_true_on_db']['are_var_std']:.4f}")
     print(f"    AAE within-run variance: {aggregated['b_prime_vs_true_on_db']['aae_var_mean']:.2f} ± {aggregated['b_prime_vs_true_on_db']['aae_var_std']:.2f}")
-    
+
     print(f"\n  A (direct processing) on DA:")
     print(f"    ARE: {aggregated['a_vs_true_on_da']['are_mean']:.4f} ± {aggregated['a_vs_true_on_da']['are_std']:.4f} (across runs)")
     print(f"    AAE: {aggregated['a_vs_true_on_da']['aae_mean']:.2f} ± {aggregated['a_vs_true_on_da']['aae_std']:.2f} (across runs)")
     print(f"    ARE within-run variance: {aggregated['a_vs_true_on_da']['are_var_mean']:.4f} ± {aggregated['a_vs_true_on_da']['are_var_std']:.4f}")
     print(f"    AAE within-run variance: {aggregated['a_vs_true_on_da']['aae_var_mean']:.2f} ± {aggregated['a_vs_true_on_da']['aae_var_std']:.2f}")
-    
+
     print(f"\n  B (direct processing) on DB:")
     print(f"    ARE: {aggregated['b_vs_true_on_db']['are_mean']:.4f} ± {aggregated['b_vs_true_on_db']['are_std']:.4f} (across runs)")
     print(f"    AAE: {aggregated['b_vs_true_on_db']['aae_mean']:.2f} ± {aggregated['b_vs_true_on_db']['aae_std']:.2f} (across runs)")
     print(f"    ARE within-run variance: {aggregated['b_vs_true_on_db']['are_var_mean']:.4f} ± {aggregated['b_vs_true_on_db']['are_var_std']:.4f}")
     print(f"    AAE within-run variance: {aggregated['b_vs_true_on_db']['aae_var_mean']:.2f} ± {aggregated['b_vs_true_on_db']['aae_var_std']:.2f}")
-    
+
     print(f"\n  C (full width) on All items:")
     print(f"    ARE: {aggregated['c_vs_true_on_all']['are_mean']:.4f} ± {aggregated['c_vs_true_on_all']['are_std']:.4f} (across runs)")
     print(f"    AAE: {aggregated['c_vs_true_on_all']['aae_mean']:.2f} ± {aggregated['c_vs_true_on_all']['aae_std']:.2f} (across runs)")
@@ -263,37 +431,47 @@ def print_summary(results_data):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Visualize ReSketchV2 split experiment results'
+        description='Visualize ReSketchV2 partition experiment results'
     )
     parser.add_argument(
         '-i', '--input',
         type=str,
         required=True,
-        help='Path to split results JSON file'
+        help='Path to partition results JSON file'
     )
     parser.add_argument(
         '-o', '--output',
         type=str,
-        default=None,
+        default="output/partition_results",
         help='Output path (without extension, will generate .png and .pdf). '
-             'Default: output/split_results'
+             'Default: output/partition_results'
     )
     parser.add_argument(
         '--show-within-variance',
         action='store_true',
         help='Show within-run variance on bar charts'
     )
-    
+
     args = parser.parse_args()
-    
+
     print(f"Loading results from: {args.input}")
     results_data = load_results(args.input)
-    
+
     print_summary(results_data)
-    
-    output_path = args.output if args.output else 'output/split_results'
-    print(f"Show within-run variance: {args.show_within_variance}")
-    plot_results(results_data, output_path, show_within_variance=args.show_within_variance)
+
+    # print(f"Show within-run variance: {args.show_within_variance}")
+    # plot_results(results_data, args.output, show_within_variance=args.show_within_variance)
+
+    # Plot accuracy of partitioned vs directly sketched
+    final_repetition_data = results_data["results"][-1]
+    calculate_accuracy_data(final_repetition_data, "a_frequencies")
+    calculate_accuracy_data(final_repetition_data, "a_prime_frequencies")
+    calculate_accuracy_data(final_repetition_data, "b_frequencies")
+    calculate_accuracy_data(final_repetition_data, "b_prime_frequencies")
+    calculate_accuracy_data(final_repetition_data, "c_frequencies")
+    final_repetition_data["c_frequencies_da"] = filter_accuracy_data_partition_only(final_repetition_data, "c_frequencies", "a_frequencies")
+    final_repetition_data["c_frequencies_db"] = filter_accuracy_data_partition_only(final_repetition_data, "c_frequencies", "b_frequencies")
+    plot_accuracy_per_key(final_repetition_data, args.output)
 
 
 if __name__ == '__main__':

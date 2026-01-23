@@ -7,7 +7,7 @@ run_and_viz() {
     echo ""
     echo "Running ${exp_name} (${OUTPUT_DIR})..."
     mkdir -p "$OUTPUT_DIR"
-    build/release/bin/release/$exp_name $extra_args --app.repetitions 5 > "$OUTPUT_DIR/${exp_name}.txt" 2>&1
+    build/release/bin/release/$exp_name $extra_args > "$OUTPUT_DIR/${exp_name}.txt" 2>&1
     
     # Find the most recent JSON file for this experiment
     local json_file=$(ls -t output/${viz_name}_results_*.json 2>/dev/null | head -1)
@@ -42,7 +42,7 @@ help() {
   echo -e "\texpand: Expansion performance"
   echo -e "\tshrink: Shrinking performance"
   echo -e "\tmerge: Merging accuracy"
-  echo -e "\tsplit: Splitting accuracy"
+  echo -e "\tpartition: Partitioning accuracy"
   echo -e "\texpand_shrink: Combined expansion and shrinking"
   echo -e "\tdag: Run execution DAG (default: ${DEFAULT_DAG_FILE}, or pass a path as next argument)"
   echo -e "\tall: Run all above experiments"
@@ -74,7 +74,7 @@ case "$exp" in
     run_and_viz "shrinking_experiment" "shrinking" &
     run_and_viz "expansion_shrinking_experiment" "expansion_shrinking" &
     run_and_viz "merge_experiment" "merge" &
-    run_and_viz "split_experiment" "split" &
+    run_and_viz "partition_experiment" "partition" &
     run_and_viz "dag_experiment" "dag" $dag_file &
     ;;
   sensitivity)
@@ -89,8 +89,8 @@ case "$exp" in
   merge)
     run_and_viz "merge_experiment" "merge" &
     ;;
-  split)
-    run_and_viz "split_experiment" "split" &
+  partition)
+    run_and_viz "partition_experiment" "partition" &
     ;;
   expand_shrink)
     run_and_viz "expansion_shrinking_experiment" "expansion_shrinking" &

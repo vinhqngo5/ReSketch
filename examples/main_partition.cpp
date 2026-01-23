@@ -13,12 +13,10 @@
 #include <chrono>
 #include <cmath>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <random>
-#include <sstream>
 #include <string>
 #include <sys/stat.h>
 #include <vector>
@@ -26,77 +24,91 @@
 using namespace std;
 using json = nlohmann::json;
 
-// Split Experiment Config
-struct SplitConfig
+// Partition Experiment Config
+struct PartitionConfig
 {
-    uint32_t memory_budget_kb = 32;
-    uint32_t repetitions = 10;
-    string dataset_type = "zipf";
+    uint32_t memory_budget_kb = 512;
+    uint32_t repetitions = 3;
+    string dataset_type = "caida";
     string caida_path = "data/CAIDA/only_ip";
-    uint64_t stream_size = 10000000;
-    uint64_t stream_diversity = 1000000;
+    uint64_t stream_size = 10'000'000;
+    uint64_t stream_diversity = 1'000'000;
     float zipf_param = 1.1;
-    string output_file = "output/split_results.json";
+    string output_file = "output/partition_results.json";
 
-    static void add_params_to_config_parser(SplitConfig &config, ConfigParser &parser)
+    static void add_params_to_config_parser(PartitionConfig &config, ConfigParser &parser)
     {
-        parser.AddParameter(new UnsignedInt32Parameter("app.memory_budget_kb", "32", &config.memory_budget_kb, false, "Memory budget in KB per sketch"));
-        parser.AddParameter(new UnsignedInt32Parameter("app.repetitions", "10", &config.repetitions, false, "Number of experiment repetitions"));
-        parser.AddParameter(new StringParameter("app.dataset_type", "zipf", &config.dataset_type, false, "Dataset type: zipf or caida"));
-        parser.AddParameter(new StringParameter("app.caida_path", "data/CAIDA/only_ip", &config.caida_path, false, "Path to CAIDA dataset"));
-        parser.AddParameter(new UnsignedInt64Parameter("app.stream_size", "10000000", &config.stream_size, false, "Stream size"));
-        parser.AddParameter(new UnsignedInt64Parameter("app.stream_diversity", "1000000", &config.stream_diversity, false, "Stream diversity (number of unique items)"));
-        parser.AddParameter(new FloatParameter("app.zipf_param", "1.1", &config.zipf_param, false, "Zipf parameter (skewness)"));
-        parser.AddParameter(new StringParameter("app.output_file", "output/split_results.json", &config.output_file, false, "Output JSON file"));
+        parser.AddParameter(
+            new UnsignedInt32Parameter("app.memory_budget_kb", to_string(config.memory_budget_kb), &config.memory_budget_kb, false, "Memory budget in KB per sketch"));
+        parser.AddParameter(new UnsignedInt32Parameter("app.repetitions", to_string(config.repetitions), &config.repetitions, false, "Number of experiment repetitions"));
+        parser.AddParameter(new StringParameter("app.dataset_type", config.dataset_type, &config.dataset_type, false, "Dataset type: zipf or caida"));
+        parser.AddParameter(new StringParameter("app.caida_path", config.caida_path, &config.caida_path, false, "Path to CAIDA data file"));
+        parser.AddParameter(new UnsignedInt64Parameter("app.stream_size", to_string(config.stream_size), &config.stream_size, false, "Stream size"));
+        parser.AddParameter(new UnsignedInt64Parameter("app.stream_diversity", to_string(config.stream_diversity), &config.stream_diversity, false, "Unique items in stream"));
+        parser.AddParameter(new FloatParameter("app.zipf", to_string(config.zipf_param), &config.zipf_param, false, "Zipfian param 'a'"));
+        parser.AddParameter(new StringParameter("app.output_file", config.output_file, &config.output_file, false, "Output JSON file path"));
     }
 
-    friend ostream &operator<<(ostream &os, const SplitConfig &config)
+    friend ostream &operator<<(ostream &os, const PartitionConfig &config)
     {
-        os << "\n=== Split Experiment Configuration ===" << endl;
-        os << "Memory Budget: " << config.memory_budget_kb << " KB" << endl;
-        os << "Repetitions: " << config.repetitions << endl;
-        os << "Dataset Type: " << config.dataset_type << endl;
-        if (config.dataset_type == "caida") { os << "CAIDA Path: " << config.caida_path << endl; }
-        os << "Stream Size: " << config.stream_size << endl;
-        os << "Stream Diversity: " << config.stream_diversity << endl;
-        if (config.dataset_type == "zipf") { os << "Zipf Parameter: " << config.zipf_param << endl; }
-        os << "Output File: " << config.output_file << endl;
+        os << "\n=== Partition Experiment Configuration ===" << endl;
+        os << format("Memory Budget (per sketch): {} KiB\n", config.memory_budget_kb);
+        os << format("Repetitions: {}\n", config.repetitions);
+        os << format("Dataset: {}\n", config.dataset_type);
+        if (config.dataset_type == "caida") { os << format("CAIDA Path: {}\n", config.caida_path); }
+        os << format("Total Stream Size: {}\n", config.stream_size);
+        os << format("Stream Diversity: {}\n", config.stream_diversity);
+        if (config.dataset_type == "zipf") { os << format("Zipf Parameter: {}\n", config.zipf_param); }
+        os << format("Output File: {}\n", config.output_file);
         return os;
     }
 };
 
 // Result structure
-struct AccuracyMetrics
-{
-    double are = 0.0;
-    double aae = 0.0;
-    double are_variance = 0.0;
-    double aae_variance = 0.0;
-};
 
-struct SketchMetrics
+struct PartitionResult
 {
-    double process_time_s = 0.0;
-    uint32_t memory_bytes = 0;
-};
+    struct SketchMetrics
+    {
+        double process_time_s = 0.0;
+        uint32_t memory_bytes = 0;
+    };
 
-struct SplitResult
-{
     // Sketch metrics
     SketchMetrics sketch_c_full;
     SketchMetrics sketch_a_direct;
     SketchMetrics sketch_b_direct;
-    double split_time_s = 0.0;
+    double partition_time_s = 0.0;
+
+    struct AccuracyMetrics
+    {
+        double are = 0.0;
+        double aae = 0.0;
+        double are_variance = 0.0;
+        double aae_variance = 0.0;
+    };
 
     // Accuracy comparisons
-    AccuracyMetrics a_prime_vs_true_on_da;   // A' (from split) vs true frequencies on DA
-    AccuracyMetrics b_prime_vs_true_on_db;   // B' (from split) vs true frequencies on DB
+    AccuracyMetrics a_prime_vs_true_on_da;   // A' (from partition) vs true frequencies on DA
+    AccuracyMetrics b_prime_vs_true_on_db;   // B' (from partition) vs true frequencies on DB
     AccuracyMetrics a_vs_true_on_da;         // A (direct) vs true frequencies on DA
     AccuracyMetrics b_vs_true_on_db;         // B (direct) vs true frequencies on DB
     AccuracyMetrics c_vs_true_on_all;        // C (full) vs true frequencies on All
+
+    struct ItemFrequency
+    {
+        uint64_t key;
+        uint64_t frequency;
+        double estimated_frequency;
+    };
+    vector<ItemFrequency> a_item_frequencies;
+    vector<ItemFrequency> b_item_frequencies;
+    vector<ItemFrequency> a_prime_item_frequencies;
+    vector<ItemFrequency> b_prime_item_frequencies;
+    vector<ItemFrequency> c_item_frequencies;
 };
 
-void export_to_json(const string &filename, const SplitConfig &app_config, const ReSketchConfig &rs_config, const vector<SplitResult> &results)
+void export_to_json(const string &filename, const PartitionConfig &app_config, const ReSketchConfig &rs_config, const vector<PartitionResult> &results)
 {
     create_directory(filename);
 
@@ -104,14 +116,10 @@ void export_to_json(const string &filename, const SplitConfig &app_config, const
     json j;
 
     // Metadata section
-    auto now = std::chrono::system_clock::now();
-    auto now_time_t = std::chrono::system_clock::to_time_t(now);
-    std::tm tm_now;
-    gmtime_r(&now_time_t, &tm_now);
-    std::ostringstream timestamp;
-    timestamp << std::put_time(&tm_now, "%Y-%m-%dT%H:%M:%SZ");
+    auto now = chrono::system_clock::now();
+    string timestamp = format("{:%FT%TZ}", chrono::round<chrono::seconds>(now));
 
-    j["metadata"] = {{"experiment_type", "split"}, {"timestamp", timestamp.str()}};
+    j["metadata"] = {{"experiment_type", "partition"}, {"timestamp", timestamp}};
 
     // Config section
     j["config"]["experiment"] = {{"memory_budget_kb", app_config.memory_budget_kb}, {"repetitions", results.size()},
@@ -130,7 +138,7 @@ void export_to_json(const string &filename, const SplitConfig &app_config, const
             {"sketch_c_full", {{"memory_bytes", result.sketch_c_full.memory_bytes}, {"process_time_s", result.sketch_c_full.process_time_s}}},
             {"sketch_a_direct", {{"memory_bytes", result.sketch_a_direct.memory_bytes}, {"process_time_s", result.sketch_a_direct.process_time_s}}},
             {"sketch_b_direct", {{"memory_bytes", result.sketch_b_direct.memory_bytes}, {"process_time_s", result.sketch_b_direct.process_time_s}}},
-            {"split_time_s", result.split_time_s},
+            {"partition_time_s", result.partition_time_s},
             {"a_prime_vs_true_on_da",
              {{"are", result.a_prime_vs_true_on_da.are},
               {"aae", result.a_prime_vs_true_on_da.aae},
@@ -156,6 +164,31 @@ void export_to_json(const string &filename, const SplitConfig &app_config, const
               {"aae", result.c_vs_true_on_all.aae},
               {"are_variance", result.c_vs_true_on_all.are_variance},
               {"aae_variance", result.c_vs_true_on_all.aae_variance}}}};
+
+        rep_json["a_frequencies"] = json::array();
+        rep_json["a_prime_frequencies"] = json::array();
+        rep_json["b_frequencies"] = json::array();
+        rep_json["b_prime_frequencies"] = json::array();
+        rep_json["c_frequencies"] = json::array();
+
+        for (auto &&[frequencies, output_name] : {
+                 pair{&result.a_item_frequencies, "a_frequencies"},
+                 pair{&result.a_prime_item_frequencies, "a_prime_frequencies"},
+                 pair{&result.b_item_frequencies, "b_frequencies"},
+                 pair{&result.a_prime_item_frequencies, "b_prime_frequencies"},
+                 pair{&result.c_item_frequencies, "c_frequencies"},
+             })
+        {
+            for (const auto &[key, frequency, estimated_frequency] : *frequencies)
+            {
+                rep_json[output_name].push_back({
+                    {"key", key},
+                    {"freq", frequency},
+                    {"est", estimated_frequency},
+                });
+            }
+        }
+
         j["results"].push_back(rep_json);
     }
 
@@ -163,37 +196,37 @@ void export_to_json(const string &filename, const SplitConfig &app_config, const
     ofstream out(filename);
     if (!out.is_open())
     {
-        cerr << "Error: Cannot open output file: " << filename << endl;
+        cerr << format("Error: Cannot open output file: {}\n", filename);
         return;
     }
 
     out << j.dump(2);
     out.close();
 
-    cout << "\nResults exported to: " << filename << endl;
+    cout << format("\nResults exported to: {}\n", filename);
 }
 
-void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_config)
+void run_partition_experiment(const PartitionConfig &config, const ReSketchConfig &rs_config)
 {
     cout << config << endl;
     cout << rs_config << endl;
 
-    vector<SplitResult> all_results;
+    vector<PartitionResult> all_results;
     all_results.reserve(config.repetitions);
 
     uint32_t memory_bytes = config.memory_budget_kb * 1024;
     uint32_t width = ReSketchV2::calculate_max_width(memory_bytes, rs_config.depth, rs_config.kll_k);
 
-    cout << "\n=== Calculated Width ===" << endl;
-    cout << "Width per sketch: " << width << endl;
+    cout << "\n=== Calculated Width ===\n";
+    cout << format("Width per sketch: {}\n", width);
 
     for (uint32_t rep = 0; rep < config.repetitions; ++rep)
     {
         cout << "\n========================================" << endl;
-        cout << "Repetition " << (rep + 1) << "/" << config.repetitions << endl;
+        cout << format("=== Repetition {}/{} ===\n", rep + 1, config.repetitions);
         cout << "========================================" << endl;
 
-        SplitResult result;
+        PartitionResult result;
 
         // Generate shared seeds for all sketches to ensure consistent hashing
         std::mt19937_64 rng(std::random_device{}());
@@ -204,8 +237,8 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         shared_seeds.reserve(rs_config.depth);
         for (uint32_t i = 0; i < rs_config.depth; ++i) { shared_seeds.push_back(dist(rng)); }
 
-        // Calculate split point for hash-based partitioning
-        uint64_t split_point = static_cast<uint64_t>((static_cast<long double>(width / 2) / width) * std::numeric_limits<uint64_t>::max());
+        // Calculate partition point for hash-based partitioning
+        auto partition_point = static_cast<uint64_t>(static_cast<long double>(width / 2) / width * std::numeric_limits<uint64_t>::max());
 
         // Generate full dataset first
         vector<uint64_t> full_data;
@@ -226,11 +259,11 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         }
         else
         {
-            cerr << "Error: Unknown dataset type: " << config.dataset_type << ". Skipping repetition." << endl;
+            cerr << format("Error: Unknown dataset type: {}. Skipping repetition.", config.dataset_type);
             continue;
         }
 
-        // Split data based on hash domain (same as split operation)
+        // Partition data based on hash domain (same as partition operation)
         vector<uint64_t> data_A, data_B;
         data_A.reserve(full_data.size() / 2);
         data_B.reserve(full_data.size() / 2);
@@ -238,16 +271,16 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         for (const auto &item : full_data)
         {
             uint64_t partition_hash = ReSketchV2::compute_partition_hash(item, shared_partition_seed);
-            if (partition_hash < split_point) { data_A.push_back(item); }
+            if (partition_hash < partition_point) { data_A.push_back(item); }
             else
             {
                 data_B.push_back(item);
             }
         }
 
-        cout << "  Full dataset: " << full_data.size() << " items" << endl;
-        cout << "  DA (hash < split_point): " << data_A.size() << " items" << endl;
-        cout << "  DB (hash >= split_point): " << data_B.size() << " items" << endl;
+        cout << format("  Full dataset: {} items\n", full_data.size());
+        cout << format("  DA (hash < partition_point): {} items\n", data_A.size());
+        cout << format("  DB (hash >= partition_point): {} items\n", data_B.size());
 
         // Calculate true frequencies for each dataset
         map<uint64_t, uint64_t> true_freqs_A, true_freqs_B, true_freqs_all;
@@ -262,7 +295,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
             true_freqs_all[item]++;
         }
 
-        cout << "  Unique items: " << true_freqs_A.size() << " (A), " << true_freqs_B.size() << " (B), " << true_freqs_all.size() << " (All)" << endl;
+        cout << format("  Unique items: {} (A), {} (B), {} (All)\n", true_freqs_A.size(), true_freqs_B.size(), true_freqs_all.size());
 
         // Process Sketch C (full width, processes both A and B)
         cout << "\nProcessing Sketch C (full, A+B)..." << endl;
@@ -273,21 +306,21 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         for (const auto &item : data_B) { sketch_C.update(item); }
         result.sketch_c_full.process_time_s = timer.stop_s();
         result.sketch_c_full.memory_bytes = sketch_C.get_max_memory_usage();
-        cout << "  Time: " << result.sketch_c_full.process_time_s << " s, Memory: " << result.sketch_c_full.memory_bytes / 1024 << " KB" << endl;
+        cout << format("  Time: {} s, Memory: {} KiB\n", result.sketch_c_full.process_time_s, result.sketch_c_full.memory_bytes / 1024);
 
-        // Split C into A' and B'
-        cout << "\nSplitting Sketch C into A' and B'..." << endl;
+        // Partition C into A' and B'
+        cout << "\nPartitioning Sketch C into A' and B'..." << endl;
         timer.start();
         auto [sketch_A_prime, sketch_B_prime] = ReSketchV2::split(sketch_C, width / 2, width / 2);
-        result.split_time_s = timer.stop_s();
-        cout << "  Split time: " << result.split_time_s << " s" << endl;
+        result.partition_time_s = timer.stop_s();
+        cout << format("  Partition time: {} s\n", result.partition_time_s);
 
-        // Print partition ranges to verify split
+        // Print partition ranges to verify partition
         cout << "  A' partition ranges: ";
-        for (const auto &[start, end] : sketch_A_prime.get_partition_ranges()) { cout << "[" << start << ", " << end << ") "; }
+        for (const auto &[start, end] : sketch_A_prime.get_partition_ranges()) { cout << format("[{}, {}) ", start, end); }
         cout << endl;
         cout << "  B' partition ranges: ";
-        for (const auto &[start, end] : sketch_B_prime.get_partition_ranges()) { cout << "[" << start << ", " << end << ") "; }
+        for (const auto &[start, end] : sketch_B_prime.get_partition_ranges()) { cout << format("[{}, {}) ", start, end); }
         cout << endl;
 
         // Process Sketch A (direct, half width)
@@ -297,7 +330,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         for (const auto &item : data_A) { sketch_A.update(item); }
         result.sketch_a_direct.process_time_s = timer.stop_s();
         result.sketch_a_direct.memory_bytes = sketch_A.get_max_memory_usage();
-        cout << "  Time: " << result.sketch_a_direct.process_time_s << " s, Memory: " << result.sketch_a_direct.memory_bytes / 1024 << " KB" << endl;
+        cout << format("  Time: {} s, Memory: {} KiB", result.sketch_a_direct.process_time_s, result.sketch_a_direct.memory_bytes / 1024);
 
         // Process Sketch B (direct, half width)
         cout << "\nProcessing Sketch B (direct, only B)..." << endl;
@@ -306,7 +339,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
         for (const auto &item : data_B) { sketch_B.update(item); }
         result.sketch_b_direct.process_time_s = timer.stop_s();
         result.sketch_b_direct.memory_bytes = sketch_B.get_max_memory_usage();
-        cout << "  Time: " << result.sketch_b_direct.process_time_s << " s, Memory: " << result.sketch_b_direct.memory_bytes / 1024 << " KB" << endl;
+        cout << format("  Time: {} s, Memory: {} KiB", result.sketch_b_direct.process_time_s, result.sketch_b_direct.memory_bytes / 1024);
 
         // Calculate accuracy comparisons
         cout << "\nCalculating accuracy metrics..." << endl;
@@ -364,7 +397,7 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
             result.a_prime_vs_true_on_da.aae_variance = sum_sq / a_prime_abs_errors.size();
         }
 
-        cout << "  A' (split) on its partition (" << count_a_prime << " items): ARE=" << result.a_prime_vs_true_on_da.are << ", AAE=" << result.a_prime_vs_true_on_da.aae << endl;
+        cout << format("  A' (partition) on its partition ({} items): ARE={}, AAE={}\n", count_a_prime, result.a_prime_vs_true_on_da.are, result.a_prime_vs_true_on_da.aae);
 
         result.b_prime_vs_true_on_db.are = count_b_prime > 0 ? total_rel_error_b_prime / count_b_prime : 0.0;
         result.b_prime_vs_true_on_db.aae = count_b_prime > 0 ? total_abs_error_b_prime / count_b_prime : 0.0;
@@ -383,41 +416,52 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
             result.b_prime_vs_true_on_db.aae_variance = sum_sq / b_prime_abs_errors.size();
         }
 
-        cout << "  B' (split) on its partition (" << count_b_prime << " items): ARE=" << result.b_prime_vs_true_on_db.are << ", AAE=" << result.b_prime_vs_true_on_db.aae << endl;
+        cout << format("  B' (partition) on its partition ({} items): ARE={}, AAE={}\n", count_b_prime, result.b_prime_vs_true_on_db.are, result.b_prime_vs_true_on_db.aae);
 
         // A (direct) vs true on DA items: baseline
         result.a_vs_true_on_da.are = calculate_are_all_items(sketch_A, true_freqs_A);
         result.a_vs_true_on_da.aae = calculate_aae_all_items(sketch_A, true_freqs_A);
         result.a_vs_true_on_da.are_variance = calculate_are_variance(sketch_A, true_freqs_A, result.a_vs_true_on_da.are);
         result.a_vs_true_on_da.aae_variance = calculate_aae_variance(sketch_A, true_freqs_A, result.a_vs_true_on_da.aae);
-        cout << "  A (direct) vs True on DA: ARE=" << result.a_vs_true_on_da.are << ", AAE=" << result.a_vs_true_on_da.aae << endl;
+        cout << format("  A (direct) vs True on DA: ARE={}, AAE={}\n", result.a_vs_true_on_da.are, result.a_vs_true_on_da.aae);
 
         // B (direct) vs true on DB items: baseline
         result.b_vs_true_on_db.are = calculate_are_all_items(sketch_B, true_freqs_B);
         result.b_vs_true_on_db.aae = calculate_aae_all_items(sketch_B, true_freqs_B);
         result.b_vs_true_on_db.are_variance = calculate_are_variance(sketch_B, true_freqs_B, result.b_vs_true_on_db.are);
         result.b_vs_true_on_db.aae_variance = calculate_aae_variance(sketch_B, true_freqs_B, result.b_vs_true_on_db.aae);
-        cout << "  B (direct) vs True on DB: ARE=" << result.b_vs_true_on_db.are << ", AAE=" << result.b_vs_true_on_db.aae << endl;
+        cout << format("  B (direct) vs True on DB: ARE={}, AAE={}\n", result.b_vs_true_on_db.are, result.b_vs_true_on_db.aae);
 
         // C (full) vs true on all items
         result.c_vs_true_on_all.are = calculate_are_all_items(sketch_C, true_freqs_all);
         result.c_vs_true_on_all.aae = calculate_aae_all_items(sketch_C, true_freqs_all);
         result.c_vs_true_on_all.are_variance = calculate_are_variance(sketch_C, true_freqs_all, result.c_vs_true_on_all.are);
         result.c_vs_true_on_all.aae_variance = calculate_aae_variance(sketch_C, true_freqs_all, result.c_vs_true_on_all.aae);
-        cout << "  C (full) vs True on All: ARE=" << result.c_vs_true_on_all.are << ", AAE=" << result.c_vs_true_on_all.aae << endl;
+        cout << format("  C (full) vs True on All: ARE={}, AAE={}\n", result.c_vs_true_on_all.are, result.c_vs_true_on_all.aae);
+
+        result.a_item_frequencies.reserve(true_freqs_A.size());
+        result.a_prime_item_frequencies.reserve(true_freqs_A.size());
+        result.b_item_frequencies.reserve(true_freqs_B.size());
+        result.b_prime_item_frequencies.reserve(true_freqs_B.size());
+
+        for (auto &[key, true_freq] : true_freqs_A)
+        {
+            result.a_item_frequencies.push_back({key, true_freq, sketch_A.estimate(key)});
+            result.a_prime_item_frequencies.push_back({key, true_freq, sketch_A_prime.estimate(key)});
+        }
+        for (auto &[key, true_freq] : true_freqs_B)
+        {
+            result.b_item_frequencies.push_back({key, true_freq, sketch_B.estimate(key)});
+            result.b_prime_item_frequencies.push_back({key, true_freq, sketch_B_prime.estimate(key)});
+        }
+        for (auto &[key, true_freq] : true_freqs_all) { result.c_item_frequencies.push_back({key, true_freq, sketch_C.estimate(key)}); }
 
         all_results.push_back(result);
     }
 
     // Add timestamp to output filename
-    auto now = std::chrono::system_clock::now();
-    auto time_t_now = std::chrono::system_clock::to_time_t(now);
-    std::tm tm_now;
-    localtime_r(&time_t_now, &tm_now);
-
-    std::ostringstream timestamp_stream;
-    timestamp_stream << std::put_time(&tm_now, "%Y%m%d_%H%M%S");
-    string timestamp = timestamp_stream.str();
+    auto now = chrono::system_clock::now();
+    string timestamp = format("{:%FT%TZ}", chrono::round<chrono::seconds>(now));
 
     // Insert timestamp before file extension
     string output_file = config.output_file;
@@ -434,10 +478,10 @@ void run_split_experiment(const SplitConfig &config, const ReSketchConfig &rs_co
 int main(int argc, char **argv)
 {
     ConfigParser parser;
-    SplitConfig app_config;
+    PartitionConfig app_config;
     ReSketchConfig rs_config;
 
-    SplitConfig::add_params_to_config_parser(app_config, parser);
+    PartitionConfig::add_params_to_config_parser(app_config, parser);
     ReSketchConfig::add_params_to_config_parser(rs_config, parser);
 
     if (argc > 1 && (string(argv[1]) == "--help" || string(argv[1]) == "-h"))
@@ -449,11 +493,11 @@ int main(int argc, char **argv)
     Status s = parser.ParseCommandLine(argc, argv);
     if (!s.IsOK())
     {
-        fprintf(stderr, "%s\n", s.ToString().c_str());
+        cerr << s.ToString();
         return -1;
     }
 
-    run_split_experiment(app_config, rs_config);
+    run_partition_experiment(app_config, rs_config);
 
     return 0;
 }
