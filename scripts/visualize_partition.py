@@ -459,7 +459,7 @@ def main():
 
     print_summary(results_data)
 
-    print(f"Show within-run variance: {args.show_within_variance}")
+    # print(f"Show within-run variance: {args.show_within_variance}")
     # plot_results(results_data, args.output, show_within_variance=args.show_within_variance)
 
     # Plot accuracy of partitioned vs directly sketched

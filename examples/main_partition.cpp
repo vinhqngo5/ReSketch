@@ -78,7 +78,7 @@ struct PartitionResult
     SketchMetrics sketch_c_full;
     SketchMetrics sketch_a_direct;
     SketchMetrics sketch_b_direct;
-    double split_time_s = 0.0;
+    double partition_time_s = 0.0;
 
     struct AccuracyMetrics
     {
@@ -119,7 +119,7 @@ void export_to_json(const string &filename, const PartitionConfig &app_config, c
     auto now = chrono::system_clock::now();
     string timestamp = format("{:%FT%TZ}", chrono::round<chrono::seconds>(now));
 
-    j["metadata"] = {{"experiment_type", "split"}, {"timestamp", timestamp}};
+    j["metadata"] = {{"experiment_type", "partition"}, {"timestamp", timestamp}};
 
     // Config section
     j["config"]["experiment"] = {{"memory_budget_kb", app_config.memory_budget_kb}, {"repetitions", results.size()},
@@ -138,7 +138,7 @@ void export_to_json(const string &filename, const PartitionConfig &app_config, c
             {"sketch_c_full", {{"memory_bytes", result.sketch_c_full.memory_bytes}, {"process_time_s", result.sketch_c_full.process_time_s}}},
             {"sketch_a_direct", {{"memory_bytes", result.sketch_a_direct.memory_bytes}, {"process_time_s", result.sketch_a_direct.process_time_s}}},
             {"sketch_b_direct", {{"memory_bytes", result.sketch_b_direct.memory_bytes}, {"process_time_s", result.sketch_b_direct.process_time_s}}},
-            {"split_time_s", result.split_time_s},
+            {"partition_time_s", result.partition_time_s},
             {"a_prime_vs_true_on_da",
              {{"are", result.a_prime_vs_true_on_da.are},
               {"aae", result.a_prime_vs_true_on_da.aae},
@@ -312,8 +312,8 @@ void run_partition_experiment(const PartitionConfig &config, const ReSketchConfi
         cout << "\nPartitioning Sketch C into A' and B'..." << endl;
         timer.start();
         auto [sketch_A_prime, sketch_B_prime] = ReSketchV2::split(sketch_C, width / 2, width / 2);
-        result.split_time_s = timer.stop_s();
-        cout << format("  Partition time: {} s\n", result.split_time_s);
+        result.partition_time_s = timer.stop_s();
+        cout << format("  Partition time: {} s\n", result.partition_time_s);
 
         // Print partition ranges to verify partition
         cout << "  A' partition ranges: ";
