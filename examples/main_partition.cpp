@@ -220,7 +220,7 @@ void run_partition_experiment(const PartitionConfig &config, const ReSketchConfi
     for (uint32_t rep = 0; rep < config.repetitions; ++rep)
     {
         cout << "\n========================================" << endl;
-        cout << format("\n=== Repetition {}/{} ===\n", rep + 1, config.repetitions);
+        cout << format("=== Repetition {}/{} ===\n", rep + 1, config.repetitions);
         cout << "========================================" << endl;
 
         PartitionResult result;
@@ -310,7 +310,7 @@ void run_partition_experiment(const PartitionConfig &config, const ReSketchConfi
         timer.start();
         auto [sketch_A_prime, sketch_B_prime] = ReSketchV2::split(sketch_C, width / 2, width / 2);
         result.split_time_s = timer.stop_s();
-        cout << format("  Partition time: {} s", result.split_time_s);
+        cout << format("  Partition time: {} s\n", result.split_time_s);
 
         // Print partition ranges to verify partition
         cout << "  A' partition ranges: ";
