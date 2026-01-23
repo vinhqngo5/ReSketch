@@ -37,7 +37,7 @@ merge_args=(
   "--app.stream_size 10000000"
 )
 
-split_args=(
+partition_args=(
   "--app.dataset_type caida"
   "--app.repetitions 30"
   "--app.memory_budget_kb 32"
@@ -95,7 +95,7 @@ help() {
   echo -e "\texpand: Expansion performance"
   echo -e "\tshrink: Shrinking performance"
   echo -e "\tmerge: Merging accuracy"
-  echo -e "\tsplit: Splitting accuracy"
+  echo -e "\tpartition: Partitioning accuracy"
   echo -e "\tdag: Run execution DAG"
 }
 
@@ -126,7 +126,7 @@ case "$exp" in
     run_and_viz "expansion_experiment" "expansion" ${expansion_args[@]} &
     run_and_viz "shrinking_experiment" "shrinking" ${shrinking_args[@]} &
     run_and_viz "merge_experiment" "merge" ${merge_args[@]} &
-    run_and_viz "split_experiment" "split" ${split_args[@]} &
+    run_and_viz "partition_experiment" "partition" ${partition_args[@]} &
     run_and_viz "dag_experiment" "dag" ${dag_args[@]} &
     ;;
   sensitivity)
@@ -141,8 +141,8 @@ case "$exp" in
   merge)
     run_and_viz "merge_experiment" "merge" ${merge_args[@]} &
     ;;
-  split)
-    run_and_viz "split_experiment" "split" ${split_args[@]} &
+  partition)
+    run_and_viz "partition_experiment" "partition" ${partition_args[@]} &
     ;;
   dag)
     run_and_viz "dag_experiment" "dag" ${dag_args[@]} &

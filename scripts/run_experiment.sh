@@ -42,7 +42,7 @@ help() {
   echo -e "\texpand: Expansion performance"
   echo -e "\tshrink: Shrinking performance"
   echo -e "\tmerge: Merging accuracy"
-  echo -e "\tsplit: Splitting accuracy"
+  echo -e "\tpartition: Partitioning accuracy"
   echo -e "\tdag: Run execution DAG (default: ${DEFAULT_DAG_FILE}, or pass a path as next argument)"
   echo -e "\tall: Run all above experiments"
 }
@@ -72,7 +72,7 @@ case "$exp" in
     run_and_viz "expansion_experiment" "expansion" &
     run_and_viz "shrinking_experiment" "shrinking" &
     run_and_viz "merge_experiment" "merge" &
-    run_and_viz "split_experiment" "split" &
+    run_and_viz "partition_experiment" "partition" &
     run_and_viz "dag_experiment" "dag" $dag_file &
     ;;
   sensitivity)
@@ -87,8 +87,8 @@ case "$exp" in
   merge)
     run_and_viz "merge_experiment" "merge" &
     ;;
-  split)
-    run_and_viz "split_experiment" "split" &
+  partition)
+    run_and_viz "partition_experiment" "partition" &
     ;;
   dag)
     run_and_viz "dag_experiment" "dag" $dag_file &
