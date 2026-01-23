@@ -27,7 +27,7 @@ using json = nlohmann::json;
 // Merge Experiment Config
 struct MergeConfig
 {
-    uint32_t memory_budget_kb = 64;
+    uint32_t memory_budget_kb = 512;
     uint32_t repetitions = 3;
     string dataset_type = "caida";
     string caida_path = "data/CAIDA/only_ip";
