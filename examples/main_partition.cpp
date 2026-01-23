@@ -105,6 +105,7 @@ struct PartitionResult
     vector<ItemFrequency> b_item_frequencies;
     vector<ItemFrequency> a_prime_item_frequencies;
     vector<ItemFrequency> b_prime_item_frequencies;
+    vector<ItemFrequency> c_item_frequencies;
 };
 
 void export_to_json(const string &filename, const PartitionConfig &app_config, const ReSketchConfig &rs_config, const vector<PartitionResult> &results)
@@ -168,12 +169,14 @@ void export_to_json(const string &filename, const PartitionConfig &app_config, c
         rep_json["a_prime_frequencies"] = json::array();
         rep_json["b_frequencies"] = json::array();
         rep_json["b_prime_frequencies"] = json::array();
+        rep_json["c_frequencies"] = json::array();
 
         for (auto &&[frequencies, output_name] : {
             pair{&result.a_item_frequencies, "a_frequencies"},
             pair{&result.a_prime_item_frequencies, "a_prime_frequencies"},
             pair{&result.b_item_frequencies, "b_frequencies"},
             pair{&result.a_prime_item_frequencies, "b_prime_frequencies"},
+            pair{&result.c_item_frequencies, "c_frequencies"},
         })
         {
             for (const auto &[key, frequency, estimated_frequency] : *frequencies)
@@ -450,6 +453,10 @@ void run_partition_experiment(const PartitionConfig &config, const ReSketchConfi
         {
             result.b_item_frequencies.push_back({key, true_freq, sketch_B.estimate(key)});
             result.b_prime_item_frequencies.push_back({key, true_freq, sketch_B_prime.estimate(key)});
+        }
+        for (auto &[key, true_freq] : true_freqs_all)
+        {
+            result.c_item_frequencies.push_back({key, true_freq, sketch_C.estimate(key)});
         }
 
         all_results.push_back(result);
