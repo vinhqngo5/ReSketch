@@ -52,7 +52,7 @@ visualize_if_exists_with_plot_every "expansion" 20
 visualize_if_exists_with_plot_every "shrinking" 4
 visualize_if_exists_with_plot_every "expansion_shrinking" 4
 visualize_if_exists "merge"
-visualize_if_exists "split"
+visualize_if_exists "partition"
 
 # Sensitivity with specific memory budget
 if [ -f "${FOLDER}/sensitivity_results.json" ]; then

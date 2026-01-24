@@ -493,6 +493,9 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                 ax2 = ax.twiny()
                 ax2.sharex(ax2_list[0])
                 ax2_list.append(ax2)
+            
+            for spine in ax2.spines.values():
+                spine.set_visible(False)
         
         # Plot WithData variants
         for sketch_name, data in with_data_aggregated.items():
@@ -536,19 +539,17 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                    fontsize=font_config['tick_size'], va='bottom', ha='right',
                    fontfamily=font_config['family'])
         
-        def format_plain(x, pos):
-            if x == 0: return "0"
-            if abs(x) >= 10000: return f"{getattr(x, 'real', x):.0f}"
-            if abs(x) >= 1: return f"{getattr(x, 'real', x):.0f}"
-            return f"{getattr(x, 'real', x):.4g}"
-
         if not use_log:
             formatter = ScalarFormatter(useOffset=False)
-            formatter.set_scientific(False)
+            if ax_idx in [4, 5]:  # Variance plots
+                formatter.set_powerlimits((5, 5))
+            else:
+                formatter.set_scientific(False)
             ax.yaxis.set_major_formatter(formatter)
             ax.yaxis.set_major_locator(plt.MaxNLocator(nbins=3, min_n_ticks=3))
         else:
-            ax.yaxis.set_major_formatter(plt.FuncFormatter(format_plain))
+            from matplotlib.ticker import LogFormatterSciNotation
+            ax.yaxis.set_major_formatter(LogFormatterSciNotation())
             ax.yaxis.set_minor_formatter(plt.NullFormatter())
         
         # Set x-axis limits and ticks for primary axis
@@ -598,7 +599,7 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
             
             for spine in axins.spines.values():
                 spine.set_edgecolor('black')
-                spine.set_linewidth(0.8)
+                spine.set_linewidth(0.1)
         
         # ARE/AAE zoom insets
         if ax_idx in [2, 3, 4, 5] and plot_nodata and ax_idx != memory_idx:
@@ -692,7 +693,7 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                 
                 for spine in axins.spines.values():
                     spine.set_edgecolor('black')
-                    spine.set_linewidth(0.8)
+                    spine.set_linewidth(0.1)
         
         # Style secondary axis
         if not is_throughput_plot and plot_nodata:
@@ -707,8 +708,16 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                 ax2.set_xticks(checkpoint_indices)
                 ax2.set_xticklabels([f'{int(m)}' for m in memory_checkpoints])
                 ax2.tick_params(labelsize=font_config['tick_size'], pad=1)
+                for spine in ax2.spines.values():
+                    spine.set_visible(False)
             else:
                 ax2.tick_params(labeltop=False)
+                for spine in ax2.spines.values():
+                    spine.set_visible(False)
+        
+        for spine in ax.spines.values():
+            spine.set_linewidth(0.1)
+            spine.set_color('black')
     
     # Create shared legend
     handles_list = []

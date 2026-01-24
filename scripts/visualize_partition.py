@@ -344,9 +344,8 @@ def plot_accuracy_per_key(results_data: dict, output_path):
     def moving_average(x, window_size: int = 1000):
         return np.convolve(x, np.ones(window_size)/window_size, mode='valid')
 
-    fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(6, 3))
+    fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(3.33, 2.2))
 
-    # for row_idx, plot in enumerate(plots):
     for row_idx, row_plots in enumerate(batched(plots, 2)):
         for col_idx, plot in enumerate(row_plots):
             ax = axs[row_idx, col_idx]
@@ -360,14 +359,16 @@ def plot_accuracy_per_key(results_data: dict, output_path):
                     label=trace.label,
                     alpha=trace.alpha,
                 )
-            style_axis(ax, font_config, plot.ylabel, plot.xlabel)
+            ax.yaxis.set_major_locator(plt.MaxNLocator(nbins='auto', min_n_ticks=3))
+            xlabel = plot.xlabel if row_idx == 1 else None
+            style_axis(ax, font_config, ylabel=plot.ylabel, xlabel=xlabel)
 
     create_shared_legend(fig, axs[0, 0], ncol=1, font_config=font_config,
-                         bbox_to_anchor=(0.3, 1.17), top_adjust=0.96)
+                         bbox_to_anchor=(0.18, 1.17), top_adjust=0.96)
     create_shared_legend(fig, axs[0, 1], ncol=1, font_config=font_config,
-                         bbox_to_anchor=(0.8, 1.17), top_adjust=0.96)
-
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
+                         bbox_to_anchor=(0.7, 1.17), top_adjust=0.96)
+  
+    plt.subplots_adjust(left=0, right=1, top=0.8, bottom=0, hspace=0.35, wspace=0.35)
 
     save_figure(fig, output_path)
 

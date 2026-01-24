@@ -127,7 +127,7 @@ def plot_results(aggregated, output_path, memory_budget_kb, show_within_variance
             Plot("AAE within-var", "aae_within_var_mean", "aae_within_var_std"),
         ])
     fig_width = 3.33 * 1.38
-    fig_height = 5
+    fig_height = 4.1
     fig, axes = plt.subplots(3, 2, figsize=(fig_width, fig_height))
     axes = axes.flatten()
 
@@ -187,7 +187,7 @@ def plot_results(aggregated, output_path, memory_budget_kb, show_within_variance
               columnspacing=1.0,
               prop={'family': font_config['family']})
 
-    plt.tight_layout(rect=[0, 0, 1, 0.88])
+    plt.tight_layout(rect=[0, 0, 1, 0.85])
     plt.subplots_adjust(hspace=0.3, wspace=0.25)
     
     save_figure(fig, output_path)
