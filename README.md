@@ -41,6 +41,10 @@ cmake --build build/release -j$(nproc)
 ./build/release/bin/release/shrinking_experiment -h 
 ./build/release/bin/release/shrinking_experiment
 
+# Example: Run expansion then shrinking experiment
+./build/release/bin/release/expansion_shrinking_experiment  -h 
+./build/release/bin/release/expansion_shrinking_experiment 
+
 # Example: Run merge experiment
 ./build/release/bin/release/merge_experiment -h
 ./build/release/bin/release/merge_experiment
@@ -62,6 +66,9 @@ python3 scripts/visualize_expansion.py --input output/expansion_results_*.json -
 # Visualize shrinking results
 python3 scripts/visualize_shrinking.py --input output/shrinking_results_*.json --output shrinking.png
 
+# Visualize expansion_shrinking results
+python3 scripts/visualize_expansion_shrinking.py --input output/expansion_shrinking_results_*.json --output expansion_shrinking.png
+
 # Visualize merge results
 python3 scripts/visualize_merge.py --input output/merge_results_*.json --output merge.png
 
@@ -77,6 +84,12 @@ python3 scripts/visualize_dag_results.py --input output/dag_results_*.json --out
 ./scripts/run_experiment.sh all
 ```
 This will run and visualize all experiments (expansion, merge, partition, shrinking, sensitivity) using default settings and save results to `output/run_all_<timestamp>/`.
+
+### Reproduce experimental results from the paper
+```bash
+./scripts/reproduce.sh
+```
+This will run and visualize all experiments (expansion, merge, partition, shrinking, sensitivity) using settings specified in the paper and save results to `output/reproduce_all_<timestamp>/`.
 
 ## Requirements
 
