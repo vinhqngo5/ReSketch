@@ -115,7 +115,7 @@ def plot_results(aggregated, output_path, memory_budget_kb, show_within_variance
         xlabel: str = "k value"
 
     plots: list[Plot] = [
-        Plot("Throughput", "throughput_mean", "throughput_std"),
+        Plot("Update", "throughput_mean", "throughput_std"),
         Plot("Query", "query_throughput_mean", "query_throughput_std"),
         Plot("ARE", "are_mean", "are_std"),
         Plot("AAE", "aae_mean", "aae_std"),
@@ -123,11 +123,11 @@ def plot_results(aggregated, output_path, memory_budget_kb, show_within_variance
     # If requested, add two more plots for within-run variance of ARE and AAE
     if show_within_variance:
         plots.extend([
-            Plot("ARE within-var", "are_within_var_mean", "are_within_var_std"),
-            Plot("AAE within-var", "aae_within_var_mean", "aae_within_var_std"),
+            Plot("ARE Variance", "are_within_var_mean", "are_within_var_std"),
+            Plot("AAE Variance", "aae_within_var_mean", "aae_within_var_std"),
         ])
-    fig_width = 3.33 * 1.38
-    fig_height = 4.1
+    fig_width = 3.33 * 1.4
+    fig_height = 0.87 * 3
     fig, axes = plt.subplots(3, 2, figsize=(fig_width, fig_height))
     axes = axes.flatten()
 
@@ -157,20 +157,23 @@ def plot_results(aggregated, output_path, memory_budget_kb, show_within_variance
             ax,
             font_config,
             ylabel=plot.ylabel,
-            xlabel=plot.xlabel if plot_idx >= 4 else None,  # Only show xlabel on bottom row
+            xlabel=plot.xlabel if plot_idx == len(plots) - 1 or plot_idx == len(plots) - 2 else None,  # Only show xlabel on the last two subplots
             title=plot.title,
         )
         
         ax.set_xticks(k_values)
-        ax.set_xticklabels(k_values)
+        if plot_idx == len(plots) - 1 or plot_idx == len(plots) - 2:
+            ax.set_xticklabels(k_values)
+        else:
+            ax.set_xticklabels([])
 
         if plot.mean_col_name in ['throughput_mean', 'query_throughput_mean']:
-            ax.text(0.25, 1.02, 'Mops/s', transform=ax.transAxes,
+            ax.text(0.12, 1.00, 'Mops/s', transform=ax.transAxes,
                    fontsize=font_config['tick_size'], va='bottom', ha='right',
                    fontfamily=font_config['family'])
 
         if plot.mean_col_name == 'aae_within_var_mean':
-            ax.text(0.12, 1.02, '×10⁴', transform=ax.transAxes,
+            ax.text(0.05, 1.00, '×10⁴', transform=ax.transAxes,
                    fontsize=font_config['tick_size'], va='bottom', ha='right',
                    fontfamily=font_config['family'])
 
@@ -179,16 +182,15 @@ def plot_results(aggregated, output_path, memory_budget_kb, show_within_variance
     fig.legend(handles, labels,
               loc='upper center',
               bbox_to_anchor=(0.5, 0.98),
-              ncol=2,
-              fontsize=font_config['legend_size'],
+              ncol=len(labels),
               frameon=False,
               handlelength=1.5,
               handletextpad=0.5,
               columnspacing=1.0,
-              prop={'family': font_config['family']})
+              prop={'family': font_config['family'], 'size': font_config['legend_size']})
 
-    plt.tight_layout(rect=[0, 0, 1, 0.85])
-    plt.subplots_adjust(hspace=0.3, wspace=0.25)
+    plt.tight_layout(rect=[0, 0, 1, 0.98])
+    plt.subplots_adjust(hspace=0.18, wspace=0.18)
     
     save_figure(fig, output_path)
 

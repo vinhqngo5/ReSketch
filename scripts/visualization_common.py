@@ -25,10 +25,10 @@ def setup_fonts(script_file):
     
     font_config = {
         'family': 'Linux Libertine',
-        'title_size': 12,
-        'label_size': 12,
-        'tick_size': 10,
-        'legend_size': 10
+        'title_size': 9,
+        'label_size': 8,
+        'tick_size': 7,
+        'legend_size': 7
     }
     
     plt.rcParams['font.family'] = font_config['family']
@@ -142,49 +142,49 @@ def get_resketch_depth_styles(material_colors):
             'color': material_colors['purple']['300'],
             'marker': 'o',
             'linestyle': '-',
-            'label': 'ReSketch (depth=1)'
+            'label': 'd = 1'
         },
         3: {
             'color': material_colors['purple']['500'],
             'marker': 's',
             'linestyle': '-',
-            'label': 'ReSketch (depth=3)'
+            'label': 'd = 3'
         },
         5: {
             'color': material_colors['purple']['700'],
             'marker': 'D',
             'linestyle': '-',
-            'label': 'ReSketch (depth=5)'
+            'label': 'd = 5'
         },
         7: {
             'color': material_colors['deeppurple']['500'],
             'marker': '^',
             'linestyle': '-',
-            'label': 'ReSketch (depth=7)'
+            'label': 'd = 7'
         },
         2: {
             'color': material_colors['orange']['300'],
             'marker': 'o',
             'linestyle': '-',
-            'label': 'ReSketch (depth=2)'
+            'label': 'd = 2'
         },
         4: {
             'color': material_colors['orange']['500'],
             'marker': 's',
             'linestyle': '-',
-            'label': 'ReSketch (depth=4)'
+            'label': 'd = 4'
         },
         6: {
             'color': material_colors['orange']['700'],
             'marker': 'D',  
             'linestyle': '-',
-            'label': 'ReSketch (depth=6)'
+            'label': 'd = 6'
         },
         8: {
             'color': material_colors['red']['500'],
             'marker': 'D',
             'linestyle': '-',
-            'label': 'ReSketch (depth=8)'
+            'label': 'd = 8'
         }
     }
 
@@ -263,18 +263,17 @@ def save_figure(fig, output_path, tight=True):
 def create_shared_legend(fig, ax, ncol=2, bbox_to_anchor=(0.5, 1.0), 
                         font_config=None, top_adjust=0.93):
     if font_config is None:
-        font_config = {'legend_size': 10, 'family': 'Linux Libertine'}
+        font_config = {'legend_size': 7, 'family': 'Linux Libertine'}
     
     handles, labels = ax.get_legend_handles_labels()
     fig.legend(handles, labels,
               loc='upper center',
               bbox_to_anchor=bbox_to_anchor,
               ncol=ncol,
-              fontsize=font_config['legend_size'],
               frameon=False,
               handlelength=1.5,
-              handletextpad=0.5,
-              columnspacing=1.0,
-              prop={'family': font_config['family']})
+              handletextpad=0.2,
+              columnspacing=0.3,
+              prop={'family': font_config['family'], 'size': font_config['legend_size']})
     
     fig.subplots_adjust(top=top_adjust)

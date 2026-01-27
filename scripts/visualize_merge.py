@@ -249,7 +249,7 @@ def plot_accuracy_per_key(results_data: dict, output_path):
     def moving_average(x, window_size: int = 1000):
         return np.convolve(x, np.ones(window_size)/window_size, mode='valid')
 
-    fig, axes = plt.subplots(nrows=1, ncols=len(plots), figsize=(3, 1.1))
+    fig, axes = plt.subplots(nrows=1, ncols=len(plots), figsize=(3.33*1.182, 0.79))
 
     for row_idx, plot in enumerate(plots):
         ax = axes[row_idx]
@@ -266,11 +266,11 @@ def plot_accuracy_per_key(results_data: dict, output_path):
         ax.yaxis.set_major_locator(plt.MaxNLocator(nbins='auto', min_n_ticks=3))
         style_axis(ax, font_config, plot.ylabel, plot.xlabel)
 
-    top_adjust = 0.68
+    top_adjust = 0.71
     create_shared_legend(fig, axes[0], ncol=2, font_config=font_config,
-                         bbox_to_anchor=(0.4, 1.02), top_adjust=top_adjust)
+                         bbox_to_anchor=(0.5, 1.02), top_adjust=top_adjust)
 
-    plt.subplots_adjust(left=-0.1, right=1, top=top_adjust, bottom=0, hspace=0.0, wspace=0.35)
+    plt.subplots_adjust(left=0, right=1, top=top_adjust, bottom=0, hspace=0.0, wspace=0.18)
 
     save_figure(fig, output_path)
 

@@ -154,8 +154,8 @@ def plot_expansion_results(config, aggregated, output_path, plot_every_n_points=
     font_config = setup_fonts(__file__)
     
     num_plots = 7 if show_within_variance else 5
-    fig_height = (9 if show_within_variance else 7) * 0.8
-    fig, axes = plt.subplots(num_plots, 1, figsize=(3.33, fig_height), sharex=True)
+    fig_height = (9 if show_within_variance else 7) * 0.56
+    fig, axes = plt.subplots(num_plots, 1, figsize=(1.665, fig_height), sharex=True)
     
     styles = get_sketch_styles(material_colors)
     
@@ -175,12 +175,12 @@ def plot_expansion_results(config, aggregated, output_path, plot_every_n_points=
         plot_line_with_error(ax_throughput, items_sampled, mean_sampled, std_sampled, style)
     
     style_axis(ax_throughput, font_config, 
-              ylabel='Throughput',)
+              ylabel='Update',)
             #   title='Expansion Experiment Results')
-    ax_throughput.text(0.12, 1.02, 'Mops/s', transform=ax_throughput.transAxes,
+    ax_throughput.text(0.12, 1.00, 'Mops/s', transform=ax_throughput.transAxes,
                       fontsize=font_config['tick_size'], va='bottom', ha='right',
                       fontfamily=font_config['family'])
-    ax_throughput.text(0.12, 1.02, 'Mops/s', transform=ax_throughput.transAxes,
+    ax_throughput.text(0.12, 1.00, 'Mops/s', transform=ax_throughput.transAxes,
                       fontsize=font_config['tick_size'], va='bottom', ha='right',
                       fontfamily=font_config['family'])
     
@@ -200,10 +200,10 @@ def plot_expansion_results(config, aggregated, output_path, plot_every_n_points=
         plot_line_with_error(ax_query, items_sampled, mean_sampled, std_sampled, style)
     
     style_axis(ax_query, font_config, ylabel='Query')
-    ax_query.text(0.12, 1.02, 'Mops/s', transform=ax_query.transAxes,
+    ax_query.text(0.12, 1.00, 'Mops/s', transform=ax_query.transAxes,
                  fontsize=font_config['tick_size'], va='bottom', ha='right',
                  fontfamily=font_config['family'])
-    ax_query.text(0.12, 1.02, 'Mops/s', transform=ax_query.transAxes,
+    ax_query.text(0.12, 1.00, 'Mops/s', transform=ax_query.transAxes,
                  fontsize=font_config['tick_size'], va='bottom', ha='right',
                  fontfamily=font_config['family'])
     
@@ -257,7 +257,7 @@ def plot_expansion_results(config, aggregated, output_path, plot_every_n_points=
             
             plot_line_with_error(ax_are_var, items_sampled, mean_sampled, std_sampled, style)
         
-        style_axis(ax_are_var, font_config, ylabel='ARE Variance\n(within-run)')
+        style_axis(ax_are_var, font_config, ylabel='ARE Variance')
         
         # AAE within-run variance
         ax_aae_var = axes[5]
@@ -274,7 +274,7 @@ def plot_expansion_results(config, aggregated, output_path, plot_every_n_points=
             
             plot_line_with_error(ax_aae_var, items_sampled, mean_sampled, std_sampled, style)
         
-        style_axis(ax_aae_var, font_config, ylabel='AAE Variance\n(within-run)')
+        style_axis(ax_aae_var, font_config, ylabel='AAE Variance')
     
     # Memory plot is always at the bottom
     memory_idx = 6 if show_within_variance else 4
@@ -295,15 +295,15 @@ def plot_expansion_results(config, aggregated, output_path, plot_every_n_points=
     style_axis(ax_memory, font_config,
               xlabel='Items Processed (millions)',
               ylabel='Memory')
-    ax_memory.text(0.05, 1.02, 'KB', transform=ax_memory.transAxes,
+    ax_memory.text(0.05, 1.00, 'KB', transform=ax_memory.transAxes,
                   fontsize=font_config['tick_size'], va='bottom', ha='right',
                   fontfamily=font_config['family'])
     
-    top_adjust = 0.93 if show_within_variance else 0.95
-    create_shared_legend(fig, ax_throughput, ncol=3, font_config=font_config,
-                        bbox_to_anchor=(0.4, 1.02), top_adjust=top_adjust)
+    top_adjust = 0.89 if show_within_variance else 0.91
+    create_shared_legend(fig, ax_throughput, ncol=2, font_config=font_config,
+                        bbox_to_anchor=(0.4, 1.00), top_adjust=top_adjust)
     
-    plt.subplots_adjust(left=-0.1, right=1, top=top_adjust, bottom=0, hspace=0.3)
+    plt.subplots_adjust(left=-0.1, right=1, top=top_adjust, bottom=0, hspace=0.18)
     
     save_figure(fig, output_path)
 
@@ -312,8 +312,8 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
     font_config = setup_fonts(__file__)
     
     num_plots = 7 if show_within_variance else 5
-    fig_height = (9 if show_within_variance else 7) * 0.8
-    fig, axes = plt.subplots(num_plots, 1, figsize=(3.33, fig_height), sharex=True)
+    fig_height = (9 if show_within_variance else 7) * 0.56
+    fig, axes = plt.subplots(num_plots, 1, figsize=(1.665, fig_height), sharex=True)
     
     styles = get_sketch_styles(material_colors)
     
@@ -417,19 +417,19 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
         shrinking_styles[base_name + '_ShrinkNoData'] = {
             'color': base_color,
             'linestyle': '--',
-            'marker': 'x',
-            'label': f'{base_name} (no data)',
-            'linewidth': 2,
-            'markersize': 6
+            'marker': 'o',
+            'label': f'{base_name} (∅)',
+            # 'linewidth': 2,
+            # 'markersize': 6
         }
         
         shrinking_styles[base_name + '_ShrinkWithData'] = {
             'color': base_color,
-            'linestyle': '-',
-            'marker': 'o',
-            'label': f'{base_name} (with data)',
-            'linewidth': 2,
-            'markersize': 6
+            'linestyle': '-' if base_name == 'ReSketch' else ':',
+            'marker': 'x' if base_name == 'ReSketch' else 'D',
+            'label': f'{base_name}',
+            # 'linewidth': 2,
+            # 'markersize': 6
         }
     
     # Find geometric limit (M0)
@@ -465,7 +465,7 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
     ax2_list = []
     
     metrics = [
-        ('throughput_mean', 'throughput_std', 'Throughput', False, 0, None, False),
+        ('throughput_mean', 'throughput_std', 'Update', False, 0, None, False),
         ('query_throughput_mean', 'query_throughput_std', 'Query', False, 1, None, False),
         ('are_mean', 'are_std', 'ARE', True, 2, None, True),
         ('aae_mean', 'aae_std', 'AAE', True, 3, None, True),
@@ -531,11 +531,11 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
         
         # Add unit labels on top of y-axis
         if ax_idx in [0, 1]:  # Throughput and Query plots
-            ax.text(0.12, 1.02, 'Mops/s', transform=ax.transAxes,
+            ax.text(0.12, 1.00, 'Mops/s', transform=ax.transAxes,
                    fontsize=font_config['tick_size'], va='bottom', ha='right',
                    fontfamily=font_config['family'])
         elif ax_idx == memory_idx:  # Memory plot
-            ax.text(0.05, 1.02, 'KB', transform=ax.transAxes,
+            ax.text(0.05, 1.00, 'KB', transform=ax.transAxes,
                    fontsize=font_config['tick_size'], va='bottom', ha='right',
                    fontfamily=font_config['family'])
         
@@ -543,6 +543,10 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
             formatter = ScalarFormatter(useOffset=False)
             if ax_idx in [4, 5]:  # Variance plots
                 formatter.set_powerlimits((5, 5))
+                ax.yaxis.get_offset_text().set_visible(False)
+                ax.text(0.05, 1.00, '×10⁵', transform=ax.transAxes,
+                       fontsize=font_config['tick_size'], va='bottom', ha='right',
+                       fontfamily=font_config['family'])
             else:
                 formatter.set_scientific(False)
             ax.yaxis.set_major_formatter(formatter)
@@ -619,9 +623,9 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                     base_x = 0.72
                 
                 if is_upper:
-                    base_y = 0.58
+                    base_y = 0.65
                 else:
-                    base_y = 0.28
+                    base_y = 0.30
 
                 
                 bbox_tuple = (base_x, base_y, 0.25, 0.25)
@@ -677,13 +681,13 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                     
                     forced_ticks = [10**log_min, 10**log_mid, 10**log_max]
                     axins.set_yticks(forced_ticks)
-                    axins.set_yticklabels([format_tick_inset(t) for t in forced_ticks])
+                    axins.set_yticklabels([format_tick_inset(t) for t in forced_ticks], fontsize=font_config['tick_size'], fontfamily=font_config['family'])
                     axins.minorticks_off()
                     axins.yaxis.set_minor_locator(plt.NullLocator())
                 else:
                     forced_ticks = [ymin, (ymin + ymax) / 2.0, ymax]
                     axins.set_yticks(forced_ticks)
-                    axins.set_yticklabels([format_tick_inset(t) for t in forced_ticks])
+                    axins.set_yticklabels([format_tick_inset(t) for t in forced_ticks], fontsize=font_config['tick_size'], fontfamily=font_config['family'])
                     axins.yaxis.set_minor_locator(plt.NullLocator())
                 
                 axins.tick_params(labelsize=font_config['tick_size'] - 2)
@@ -707,7 +711,9 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                 # make the xticks label closer to the ticks
                 ax2.set_xticks(checkpoint_indices)
                 ax2.set_xticklabels([f'{int(m)}' for m in memory_checkpoints])
-                ax2.tick_params(labelsize=font_config['tick_size'], pad=1)
+                ax2.tick_params(labelsize=font_config['tick_size'], pad=-2)
+                # make xticks shorter
+                ax2.tick_params(length=2)
                 for spine in ax2.spines.values():
                     spine.set_visible(False)
             else:
@@ -740,20 +746,19 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                 labels_list.append(label)
                 seen_labels.add(label)
     
-    top_adjust = 0.90 if show_within_variance else 0.88
+    top_adjust = 0.89 if show_within_variance else 0.91
     if handles_list:
         fig.legend(handles_list, labels_list,
                   loc='upper center',
-                  bbox_to_anchor=(0.4, 1.02),
+                  bbox_to_anchor=(0.38, 1.00),
                   ncol=2,
-                  fontsize=font_config['legend_size'],
                   frameon=False,
                   handlelength=1.5,
-                  handletextpad=0.5,
-                  columnspacing=1.0,
-                  prop={'family': font_config['family']})
+                  handletextpad=0.2,
+                  columnspacing=0.3,
+                  prop={'family': font_config['family'], 'size': font_config['legend_size']})
     
-    plt.subplots_adjust(left=-0.1, right=1, top=top_adjust, bottom=0, hspace=0.3)
+    plt.subplots_adjust(left=-0.1, right=1, top=top_adjust, bottom=0, hspace=0.18)
     save_figure(fig, output_path)
 
 def main():
