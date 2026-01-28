@@ -295,7 +295,7 @@ def plot_expansion_results(config, aggregated, output_path, plot_every_n_points=
     style_axis(ax_memory, font_config,
               xlabel='Items Processed (millions)',
               ylabel='Memory')
-    ax_memory.text(0.05, 1.00, 'KB', transform=ax_memory.transAxes,
+    ax_memory.text(0.05, 1.00, 'KiB', transform=ax_memory.transAxes,
                   fontsize=font_config['tick_size'], va='bottom', ha='right',
                   fontfamily=font_config['family'])
     
@@ -346,7 +346,7 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                 'aae_var_mean': exp_data['aae_var_mean'][last_idx],
                 'aae_var_std': exp_data['aae_var_std'][last_idx],
             }
-            print(f"    {sketch_name} M1: {m1_data[sketch_name]['memory_kb']:.1f} KB at {m1_data[sketch_name]['items_processed']:.0f} items")
+            print(f"    {sketch_name} M1: {m1_data[sketch_name]['memory_kb']:.1f} KiB at {m1_data[sketch_name]['items_processed']:.0f} items")
     
     # Prepend M1 data to WithData variants
     for sketch_name in ['ReSketch', 'GeometricSketch']:
@@ -404,8 +404,8 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
     
     m1_kb_rounded = 2 ** int(np.floor(np.log2(m1_kb)))
     
-    print(f"  Calculated M1 from data: {m1_kb:.1f} KB (next power-of-2 below: {m1_kb_rounded} KB)")
-    print(f"  M2 target: {m2_kb} KB")
+    print(f"  Calculated M1 from data: {m1_kb:.1f} KiB (next power-of-2 below: {m1_kb_rounded} KiB)")
+    print(f"  M2 target: {m2_kb} KiB")
     
     # Create custom styles for shrinking variants
     shrinking_styles = {}
@@ -440,7 +440,7 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
         memory_values = gs_data['memory_mean']
         # Find first checkpoint where memory reaches M0 (within tolerance)
         for i in range(len(memory_values)):
-            if abs(memory_values[i] - m0_kb) < 5.0:  # Within 5KB of M0
+            if abs(memory_values[i] - m0_kb) < 5.0:  # Within 5KiB of M0
                 geometric_limit_idx = i
                 break
     
@@ -522,7 +522,7 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                 plot_line_with_error(target_ax, x_positions, mean, std, style)
         
         if geometric_limit_idx is not None and gs_data is not None:
-            limit_label = f'GS limit ({int(geometric_limit_memory)}KB)' if geometric_limit_memory is not None else f'GS limit ({m0_kb}KB)'
+            limit_label = f'GS limit ({int(geometric_limit_memory)}KiB)' if geometric_limit_memory is not None else f'GS limit ({m0_kb}KiB)'
             ax.axvline(x=geometric_limit_idx, color='gray', linestyle=':', linewidth=1.5, alpha=0.7,
                       label=limit_label if ax_idx == 0 else '')
         
@@ -535,7 +535,7 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                    fontsize=font_config['tick_size'], va='bottom', ha='right',
                    fontfamily=font_config['family'])
         elif ax_idx == memory_idx:  # Memory plot
-            ax.text(0.05, 1.00, 'KB', transform=ax.transAxes,
+            ax.text(0.05, 1.00, 'KiB', transform=ax.transAxes,
                    fontsize=font_config['tick_size'], va='bottom', ha='right',
                    fontfamily=font_config['family'])
         
@@ -595,7 +595,7 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
             axins.set_xticklabels(tick_labels, fontsize=font_config['tick_size'] - 1)
             axins.tick_params(labelsize=font_config['tick_size'] - 1)
             axins.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
-            # axins.set_ylabel('Memory (KB)', fontsize=font_config['label_size'] - 1)
+            # axins.set_ylabel('Memory (KiB)', fontsize=font_config['label_size'] - 1)
             formatter = ScalarFormatter(useOffset=False)
             formatter.set_scientific(False)
             axins.yaxis.set_major_formatter(formatter)
@@ -702,7 +702,7 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
         # Style secondary axis
         if not is_throughput_plot and plot_nodata:
             if ax_idx == 2:
-                # ax2.set_xlabel('Memory (KB)', fontsize=font_config['label_size'])
+                # ax2.set_xlabel('Memory (KiB)', fontsize=font_config['label_size'])
                 
                 # Set secondary axis to match primary
                 ax2.set_xlim(-0.5, num_checkpoints - 0.5)
@@ -710,7 +710,10 @@ def plot_shrinking_results(config, no_data_aggregated, with_data_aggregated, exp
                 # Label with power-of-2 memory values at checkpoint positions
                 # make the xticks label closer to the ticks
                 ax2.set_xticks(checkpoint_indices)
-                ax2.set_xticklabels([f'{int(m)}' for m in memory_checkpoints])
+                labels = [f'{int(m)}' for m in memory_checkpoints]
+                if labels:
+                    labels[-1] += ' KiB'
+                ax2.set_xticklabels(labels)
                 ax2.tick_params(labelsize=font_config['tick_size'], pad=-2)
                 # make xticks shorter
                 ax2.tick_params(length=2)
@@ -818,9 +821,9 @@ def main():
         m1_kb_geometric = expansion_aggregated['GeometricSketch']['memory_mean'][-1]
     
     print("\nExperiment Configuration:")
-    print(f"  M0 (Initial): {m0_kb} KB")
-    print(f"  M1 (After Expansion): ReSketch={m1_kb_resketch:.0f} KB, GeometricSketch={m1_kb_geometric:.0f} KB")
-    print(f"  M2 (Target): {m2_kb} KB")
+    print(f"  M0 (Initial): {m0_kb} KiB")
+    print(f"  M1 (After Expansion): ReSketch={m1_kb_resketch:.0f} KiB, GeometricSketch={m1_kb_geometric:.0f} KiB")
+    print(f"  M2 (Target): {m2_kb} KiB")
     print(f"  Expansion Items: {expansion_items}")
     print(f"  Shrinking Items: {shrinking_items}")
     print(f"  Repetitions: {repetitions}")
