@@ -378,13 +378,13 @@ def plot_results(config, results, metadata, output_path,
             ax.text(pos[0], pos[1], "No data",
                     fontsize=font_config['tick_size'], ha='center', va='center', 
                     zorder=3, fontfamily=font_config['family'])
+            memory_kb = 0  # No data available
         
         # Draw operation type label at bottom
         if operation == 'create':
             config_text = f"CREATE\n(d={sketch_config['depth']}, k={sketch_config['kll_k']})\nmemory_budget_kb={format_memory(sketch_info.get('memory_budget_kb', 0))}\nused={format_memory(memory_kb)}"
         else:
-            memory_used_kb = checkpoint_metrics['memory_kb']
-            config_text = f"memory_budget_kb={format_memory(sketch_info.get('memory_budget_kb', 0))}\nused={format_memory(memory_used_kb)}"
+            config_text = f"memory_budget_kb={format_memory(sketch_info.get('memory_budget_kb', 0))}\nused={format_memory(memory_kb)}"
         
         ax.text(pos[0], pos[1] - box_height/2 - 0.15, config_text,
                 fontsize=font_config['tick_size'] - 1, ha='center', va='top', 

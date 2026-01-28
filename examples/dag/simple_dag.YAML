@@ -29,7 +29,7 @@ datasets:
 
 sketch_config:
   depth: 4
-  kll_k: 30
+  kll_k: 10
 
 evaluation:
   metrics: [throughput, query_throughput, are, aae, latency]
@@ -40,63 +40,62 @@ sketches:
     operation: "create"
     memory_budget_kb: 1024
     datasets:
-      - {dataset: "caida", num_items: 1000000}
+      - {dataset: "caida", num_items: 2000000, start_offset: 0}
     
   B:
     operation: "expand"
     source: "A"
     memory_budget_kb: 2560
     datasets:
-      - {dataset: "zipf_1.1", num_items: 1000000, start_offset: 0}
-      - {dataset: "zipf_1.2", num_items: 1000000, start_offset: 5000000}
+      - {dataset: "caida", num_items: 2000000, start_offset: 2000000}
     
   C:
     operation: "shrink"
     source: "B"
     memory_budget_kb: 700
     datasets:
-      - {dataset: "zipf_1.1", num_items: 1000000}
+      - {dataset: "caida", num_items: 2000000, start_offset: 4000000}
     
   D:
     operation: "create"
     memory_budget_kb: 1536
     datasets:
-      - {dataset: "zipf_1.2", num_items: 1000000}
+      - {dataset: "caida", num_items: 2000000, start_offset: 6000000}
     
   E:
     operation: "merge"
     sources: ["C", "D"]
     memory_budget_kb: 2236
     datasets:
-      - {dataset: "caida", num_items: 3000000}
+      - {dataset: "caida", num_items: 2000000, start_offset: 8000000}
     
   F:
     operation: "split"
     source: "E"
     memory_budget_kb: 1024
     datasets:
-      - {dataset: "zipf_1.1", num_items: 1000000}
+      - {dataset: "caida", num_items: 0, start_offset: 0}
     
   G:
     operation: "split"
     source: "E"
     memory_budget_kb: 1228
     datasets:
-      - {dataset: "zipf_1.2", num_items: 1000000}
+      - {dataset: "caida", num_items: 0, start_offset: 0}
 
-  H:
-    operation: "expand"
-    source: "G"
-    memory_budget_kb: 2000
-    datasets:
-      - {dataset: "zipf_1.2", num_items: 1000000}
+  # H:
+  #   operation: "expand"
+  #   source: "G"
+  #   memory_budget_kb: 2000
+  #   datasets:
+  #     - {dataset: "caida", num_items: 1000000}
 
-  I:
-    operation: "merge"
-    sources: ["F", "H"]
-    memory_budget_kb: 3024
-    datasets:
-      - {dataset: "caida", num_items: 2000000}
+  # I:
+  #   operation: "merge"
+  #   sources: ["F", "H"]
+  #   memory_budget_kb: 3024
+  #   datasets:
+  #     - {dataset: "caida", num_items: 2000000}
 
 other_options:
   master_seed: 42
