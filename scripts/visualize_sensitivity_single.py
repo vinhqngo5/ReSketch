@@ -151,6 +151,10 @@ def plot_results(aggregated, output_path, memory_budget_kb, show_within_variance
                 data_mean = data_mean / 1e4
                 data_std = data_std / 1e4
 
+            # Clip std to prevent negative values in shaded region for non-negative metrics
+            # All metrics here (throughput, ARE, AAE, variance) are always >= 0
+            data_std = np.minimum(data_std, data_mean)
+
             plot_line_with_error(ax, k_values, data_mean, data_std, style)
 
         style_axis(

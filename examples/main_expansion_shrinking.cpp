@@ -680,6 +680,42 @@ void run_expansion_shrinking_experiment(
         size_t num_intervals = standard_item_intervals.size();
         for (size_t interval_idx = 0; interval_idx < num_intervals; ++interval_idx)
         {
+            bool gs_cannot_shrink = false;
+
+            // Shrink to target memory at this checkpoint
+            size_t checkpoint_idx = interval_idx;
+
+            // Shrink ReSketch to checkpoint
+            if (checkpoint_idx < rs_memory_checkpoints.size())
+            {
+                uint64_t target_memory = rs_memory_checkpoints[checkpoint_idx];
+                uint32_t new_rs_width = calculate_width_from_memory_resketch(target_memory, rs_config.depth, rs_config.kll_k);
+                if (new_rs_width < rs_shrink_with_data_conf.width)
+                {
+                    rs_shrink_with_data.shrink(new_rs_width);
+                    rs_shrink_with_data_conf.width = new_rs_width;
+                }
+            }
+
+            // Shrink GeometricSketch to checkpoint
+            if (checkpoint_idx < gs_memory_checkpoints.size())
+            {
+                uint64_t target_memory = gs_memory_checkpoints[checkpoint_idx];
+                uint32_t new_gs_width = calculate_width_from_memory_geometric(target_memory, gs_config.depth);
+
+                if (new_gs_width >= gs_shrink_with_data_conf.width)
+                {
+                    gs_cannot_shrink = true;
+                    cout << "GeometricSketch cannot shrink to width " << new_gs_width << " (current width: " << gs_shrink_with_data_conf.width << ")" << endl;
+                }
+                else
+                {
+                    gs_shrink_with_data.shrink(new_gs_width);
+                    gs_shrink_with_data_conf.width = new_gs_width;
+                }
+            }
+
+            // Process data for this interval
             uint64_t items_this_interval = standard_item_intervals[interval_idx];
 
             if (shrink_items_processed + items_this_interval > config.shrinking_items) { items_this_interval = config.shrinking_items - shrink_items_processed; }
@@ -704,39 +740,6 @@ void run_expansion_shrinking_experiment(
             // Calculate true frequencies including shrinking phase
             map<uint64_t, uint64_t> combined_true_freqs = expansion_true_freqs;
             for (uint64_t i = items_processed; i < items_processed + shrink_items_processed; ++i) { combined_true_freqs[base_data[i % base_data.size()]]++; }
-
-            bool gs_cannot_shrink = false;
-
-            // Shrink ReSketch to checkpoint at interval_idx
-            size_t checkpoint_idx = interval_idx;
-            if (checkpoint_idx < rs_memory_checkpoints.size())
-            {
-                uint64_t target_memory = rs_memory_checkpoints[checkpoint_idx];
-                uint32_t new_rs_width = calculate_width_from_memory_resketch(target_memory, rs_config.depth, rs_config.kll_k);
-                if (new_rs_width < rs_shrink_with_data_conf.width)
-                {
-                    rs_shrink_with_data.shrink(new_rs_width);
-                    rs_shrink_with_data_conf.width = new_rs_width;
-                }
-            }
-
-            // Shrink GeometricSketch to checkpoint at interval_idx
-            if (checkpoint_idx < gs_memory_checkpoints.size())
-            {
-                uint64_t target_memory = gs_memory_checkpoints[checkpoint_idx];
-                uint32_t new_gs_width = calculate_width_from_memory_geometric(target_memory, gs_config.depth);
-
-                if (new_gs_width >= gs_shrink_with_data_conf.width)
-                {
-                    gs_cannot_shrink = true;
-                    cout << "GeometricSketch cannot shrink to width " << new_gs_width << " (current width: " << gs_shrink_with_data_conf.width << ")" << endl;
-                }
-                else
-                {
-                    gs_shrink_with_data.shrink(new_gs_width);
-                    gs_shrink_with_data_conf.width = new_gs_width;
-                }
-            }
 
             // Record checkpoint
             Checkpoint rs_with_data_cp, gs_with_data_cp;
