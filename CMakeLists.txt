@@ -14,7 +14,7 @@ if(CLANG_TIDY_EXE)
     # set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE};--config-file=${CMAKE_SOURCE_DIR}/.clang-tidy")
 endif()
 
-# clang-format
+# clang-format 
 find_program(CLANG_FORMAT clang-format)
 if(CLANG_FORMAT)
   set(CMAKE_CXX_CLANG_FORMAT ${CLANG_FORMAT})
